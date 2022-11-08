@@ -90,3 +90,135 @@ For open source projects, say how it is licensed.
 
 ## Project status
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+
+# Kainos Data Migration
+
+
+
+# Table of Contents
+
+- [1. Task brief](#task-brief)
+  - [1.1. Supporting documentation](#supporting)
+  - [1.2 Folder Locations](#folder-locations)
+  - [1.3 Getting set up](#gsu)
+  - [1.4 File descriptions](#fd)
+  - [1.5 Project Status](#ps)
+  - [1.6 Bugs](#bugs)
+- [2. Branches](#branches)
+  - [1.1. This projects branches](#this-projecs-branches)
+  - [2.2 How to branch](#how-to)
+- [3. Committing changes](#cc)
+- [4. Version control](#vc)
+- [5. Validation checks](#val)
+
+
+
+<a name="task-brief"></a>
+
+# 1. Task brief
+#### [Go To Top](#table-of-contents "Go To Top")
+
+
+### 1.1 Supporting Documentation
+
+Workfront Task - <a>https://clevertouchops.my.workfront.com/project/62457736002530cef0b3632f477f71cb/tasks</a>
+
+
+### Checks before run
+Check that both objects_for_extraction,& objects_for_processing include all objects.
+...
+(arya)
+### 1.2 Folder Locations
+
+### 1.3 Getting set up
+See branches for details on creating a branch
+
+1. You will need to create a config.py file and populate it with password information. CHECK THIS FILE IS ADDED TO GITIGNORE
+
+
+### 1.4 File descriptions
+
+A breakdown of the files you can find and what they do. It will ignore gitignore/readme/requirements.txt files.
+
+| Folder | File | Description  | Status
+| :-- | :-- | :-- | :--  
+crm-migration(main folder) > Validation Checks | Validation checks.py | | Work in progress
+crm-migration(main folder | config_example  | | Work in progress
+|| export_object_files.py | | Work in progress
+|| extract_and_cache_data.py | | Work in progress
+|| locations.py | | Work in progress
+|| main.py | | Work in progress
+|| specific_object_process_activity.py | | Work in progress
+|| specific_object_process_lead.py | | Work in progress 
+|| specific_object_process_opportunity.py | | Work in progress
+|| specific_object_process_oppproduct.py | | Work in progress
+|| testing.py | | Work in progress
+
+### 1.5 Project status
+Detail information on the project status here
+What is outstanding
+What needs to be implemented
+
+
+### 1.6 Bugs
+| File containing bug | Description  | Status | Assigned to fix
+| :-- | :-- | :-- | :--
+main.py | x is not working | Not fixed | Name someone that may need to look at it
+
+
+
+<a name="branches"></a>
+
+# 2. Branches
+#### [Go To Top](#table-of-contents "Go To Top")
+
+### 2.1 This projects branches
+<a href="https://git.clever-touch.com/insights-testing/kainos/crm-migration/-/tree/main">Main</a> - This is considered the live branch. You should not make any changes within this branch.
+
+<a href="https://git.clever-touch.com/insights-testing/kainos/crm-migration/-/tree/Development_Validation_Checks">Development_Validation_checks</a> - You should create a branch from here for any development work. The work can then be peer
+reviewed and pushed to main once checked. You should always branch from here. 
+
+Other branches - You may see other branches but the two above are the main branches.
+
+### 2.2 How to branch 
+
+
+<a name="cc"></a>
+
+# 3. Committing changes
+#### [Go To Top](#table-of-contents "Go To Top")
+
+### Git Terminal Commands
+If you are happy with the changes you can commit them to git lab quickly by using the following commands.
+
+Please not however, that adding ALL files may not be ideal. You may have files you dont want to push like your config and or password files. If you are happy that you can safely commit all files then you can use these commands.
+
+1. Finding the terminal
+![index web](img/pycharm_terminal.png)
+2. Type "git add .". This will add all files to be pushed to gitlab.
+3. Type "git commit -m"<enter text explaining changes to files here>". This will attach a message to those files.
+4. Type "git push". This will push the files to git lab.
+
+
+
+
+<a name="vc"></a>
+
+# 4. Version Control
+#### [Go To Top](#table-of-contents "Go To Top")
+
+| Col Header 1 | Col Header 2  | Col Header 3
+| :-- | :-- | :--
+Example Text 1 | Placeholder text | Placeholder text
+Example Text 2 | Placeholder text | Placeholder text
+
+
+
+<a name="val"></a>
+
+# 5. Validation Checks
+#### [Go To Top](#table-of-contents "Go To Top")
+
+A document containing all the validation checks can be found <a href="https://clevertouch.sharepoint.com/:x:/s/Kainos/EQ_qyvlm4CxDnf6ZIcaR6TIB8FjLT5GFp3bfk1LmkpLIQw?e=Vb6UER">here</a>.
+
