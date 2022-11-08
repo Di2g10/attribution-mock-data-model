@@ -1,8 +1,27 @@
-# Basic Project Template
+# ENTER PROJECT NAME HERE
 
 
+# Table of Contents
 
-## Getting started
+- [1. Getting started](#getting-started)
+- [2. Task brief](#task-brief)
+  - [2.1. Supporting documentation](#supporting)
+  - [2.2 Folder Locations](#folder-locations)
+  - [2.3 Getting set up](#gsu)
+  - [2.4 File descriptions](#fd)
+  - [2.5 Project Status](#ps)
+  - [2.6 Bugs](#bugs)
+- [3. Branches](#branches)
+  - [3.1. This projects branches](#this-projecs-branches)
+  - [3.2 How to branch](#how-to)
+- [4. Committing changes](#cc)
+- [5. Version control](#vc)
+- [6. Validation checks](#val)
+
+#### [Go To Top](#table-of-contents "Go To Top")
+<a name="getting-started"></a>
+
+## 1. Getting started
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.
 
@@ -51,8 +70,6 @@ When you're ready to make this README your own, just edit this file and use the 
 ## Suggestions for a good README
 Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
-## Name
-Choose a self-explaining name for your project.
 
 ## Description
 Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
@@ -92,46 +109,24 @@ For open source projects, say how it is licensed.
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
 
 
-# Kainos Data Migration
 
 
-
-# Table of Contents
-
-- [1. Task brief](#task-brief)
-  - [1.1. Supporting documentation](#supporting)
-  - [1.2 Folder Locations](#folder-locations)
-  - [1.3 Getting set up](#gsu)
-  - [1.4 File descriptions](#fd)
-  - [1.5 Project Status](#ps)
-  - [1.6 Bugs](#bugs)
-- [2. Branches](#branches)
-  - [1.1. This projects branches](#this-projecs-branches)
-  - [2.2 How to branch](#how-to)
-- [3. Committing changes](#cc)
-- [4. Version control](#vc)
-- [5. Validation checks](#val)
-
-
+#### [Go To Top](#table-of-contents "Go To Top")
 
 <a name="task-brief"></a>
 
-# 1. Task brief
-#### [Go To Top](#table-of-contents "Go To Top")
+# 2. Task brief
 
+### 2.1 Supporting Documentation
 
-### 1.1 Supporting Documentation
-
-Workfront Task - <a>https://clevertouchops.my.workfront.com/project/62457736002530cef0b3632f477f71cb/tasks</a>
+Workfront Task(/s) - 
 
 
 ### Checks before run
-Check that both objects_for_extraction,& objects_for_processing include all objects.
-...
-(arya)
-### 1.2 Folder Locations
 
-### 1.3 Getting set up
+### 2.2 Folder Locations
+
+### 2.3 Getting set up
 See branches for details on creating a branch
 
 1. You will need to create a config.py file and populate it with password information. CHECK THIS FILE IS ADDED TO GITIGNORE
@@ -143,22 +138,13 @@ A breakdown of the files you can find and what they do. It will ignore gitignore
 
 | Folder | File | Description  | Status
 | :-- | :-- | :-- | :--  
-crm-migration(main folder) > Validation Checks | Validation checks.py | | Work in progress
-crm-migration(main folder | config_example  | | Work in progress
-|| export_object_files.py | | Work in progress
-|| extract_and_cache_data.py | | Work in progress
-|| locations.py | | Work in progress
-|| main.py | | Work in progress
-|| specific_object_process_activity.py | | Work in progress
-|| specific_object_process_lead.py | | Work in progress 
-|| specific_object_process_opportunity.py | | Work in progress
-|| specific_object_process_oppproduct.py | | Work in progress
-|| testing.py | | Work in progress
+Add | text |here | .
 
 ### 1.5 Project status
 Detail information on the project status here
-What is outstanding
-What needs to be implemented
+What is outstanding?
+What needs to be implemented?
+Any other important information
 
 
 ### 1.6 Bugs
@@ -174,9 +160,9 @@ main.py | x is not working | Not fixed | Name someone that may need to look at i
 #### [Go To Top](#table-of-contents "Go To Top")
 
 ### 2.1 This projects branches
-<a href="https://git.clever-touch.com/insights-testing/kainos/crm-migration/-/tree/main">Main</a> - This is considered the live branch. You should not make any changes within this branch.
+<a href=" ADD WEBSITE LINK HERE ">Main</a> - This is considered the live branch. You should not make any changes within this branch.
 
-<a href="https://git.clever-touch.com/insights-testing/kainos/crm-migration/-/tree/Development_Validation_Checks">Development_Validation_checks</a> - You should create a branch from here for any development work. The work can then be peer
+<a href=" ADD WEBSITE LINK HERE ">Development</a> - You should create a branch from here for any development work. The work can then be peer
 reviewed and pushed to main once checked. You should always branch from here. 
 
 Other branches - You may see other branches but the two above are the main branches.
@@ -194,13 +180,14 @@ If you are happy with the changes you can commit them to git lab quickly by usin
 
 Please not however, that adding ALL files may not be ideal. You may have files you dont want to push like your config and or password files. If you are happy that you can safely commit all files then you can use these commands.
 
-1. Finding the terminal
-![index web](img/pycharm_terminal.png)
-2. Type "git add .". This will add all files to be pushed to gitlab.
+1. In the terminal
+2. Type "git add .". This will add ALL files to be pushed to gitlab.
 3. Type "git commit -m"<enter text explaining changes to files here>". This will attach a message to those files.
 4. Type "git push". This will push the files to git lab.
 
+### Python Committing
 
+Need to add details here.
 
 
 <a name="vc"></a>
@@ -208,10 +195,10 @@ Please not however, that adding ALL files may not be ideal. You may have files y
 # 4. Version Control
 #### [Go To Top](#table-of-contents "Go To Top")
 
-| Col Header 1 | Col Header 2  | Col Header 3
+| Version number | Change  | Description | Supporting documentation/links
 | :-- | :-- | :--
-Example Text 1 | Placeholder text | Placeholder text
-Example Text 2 | Placeholder text | Placeholder text
+Example Text 1 | Placeholder text | Placeholder text |
+Example Text 2 | Placeholder text | Placeholder text |
 
 
 
@@ -220,5 +207,5 @@ Example Text 2 | Placeholder text | Placeholder text
 # 5. Validation Checks
 #### [Go To Top](#table-of-contents "Go To Top")
 
-A document containing all the validation checks can be found <a href="https://clevertouch.sharepoint.com/:x:/s/Kainos/EQ_qyvlm4CxDnf6ZIcaR6TIB8FjLT5GFp3bfk1LmkpLIQw?e=Vb6UER">here</a>.
+A document containing all the validation checks can be found <a href=" ADD LINK HERE ">here</a>.
 
