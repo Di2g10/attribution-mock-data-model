@@ -1,4 +1,4 @@
-# ENTER PROJECT NAME HERE
+# Kainos Acquisitions Migration
 
 
 # Table of Contents
@@ -167,43 +167,63 @@ If you have run out of energy or time for your project, put a note at the top of
 
 Workfront Task(/s) - 
 
+Specific migration task - https://clevertouchops.my.workfront.com/task/63455e8400ab6f57e8a899f55ded7e25
 
-### Checks before run
+Overall project task - https://clevertouchops.my.workfront.com/project/63455e2100ab4a52f6daae164d05f151/tasks
+
+
 
 ### 2.2 Folder Locations
+
+Kainos sharepoint folder - https://clevertouch.sharepoint.com/:f:/s/Kainos/EnoQR6KZp2hFj_mYvhwFNB0Bctl2XdLW9rwWGREaAUQ-6Q?e=s3rGhH
+
+Kainos mapping document folder - https://clevertouch.sharepoint.com/:f:/s/Kainos/EswM4OlcdsdEuV6WgFeexdUBFDHgk-6DNNGKbR-zbGNkUQ?e=zOSSiz
 
 ### 2.3 Getting set up
 See branches for details on creating a branch
 
 1. You will need to create a config.py file and populate it with password information. CHECK THIS FILE IS ADDED TO GITIGNORE
+2. Clone this down to your working enviornment ensuring you set up a virtual environment. 
+   1. A straight clone using VCS wont set it up with one so you will have to activate it in the settings
+   2. You may also need BTP (or whatever IT supplier) to set up a path in your operating system environment
+3. Install requirements using 
+
+
+    pip install -r requirements.txt
 
 
 ### 1.4 File descriptions
 
 A breakdown of the files you can find and what they do. It will ignore gitignore/readme/requirements.txt files.
 
-| Folder | File | Description  | Status
-| :-- | :-- | :-- | :--  
-Add | text |here | .
+
+| Script | Description                                                                     | Status |
+|------------------------|---------------------------------------------------------------------------------|--------|
+| main.py       | I have tried to create a main script that pulls other scripts based on prompts. | wip    |
+
 
 ### 1.5 Project status
-Detail information on the project status here
-What is outstanding?
-What needs to be implemented?
-Any other important information
+01/12/2022 
+
+- Currently able to extract data from snowflake and store it as a cache.
+- The main.py file has been set up to call functions from other scripts.
+- Still waiting to get access to Intutitve hubspot instance
+- Need to connect to dynamics 365 and pull in data
+
 
 
 ### 1.6 Bugs
-| File containing bug | Description  | Status | Assigned to fix
-| :-- | :-- | :-- | :--
-main.py | x is not working | Not fixed | Name someone that may need to look at it
 
+| Script/location of bug | Description | Status | Assigned to fix |
+|------------------------|-------------|--------|-----------------|
+| main.py (example)      | n/a         | n/a    | n/a             |
 
 
 <a name="branches"></a>
 
 # 2. Branches
 #### [Go To Top](#table-of-contents "Go To Top")
+
 
 ### 2.1 This projects branches
 <a href=" ADD WEBSITE LINK HERE ">Main</a> - This is considered the live branch. You should not make any changes within this branch.
@@ -212,6 +232,16 @@ main.py | x is not working | Not fixed | Name someone that may need to look at i
 reviewed and pushed to main once checked. You should always branch from here. 
 
 Other branches - You may see other branches but the two above are the main branches.
+
+https://git.clever-touch.com/insights-testing/kainos/acquisition-migration/-/tree/feature_initial_creation
+
+
+| Script/location of bug | Description                                                                                            | Status | Link                                                                                                                                              | 
+|------------------------|--------------------------------------------------------------------------------------------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------| 
+| main      | Do not push to this branch unless it has been approved. In most cases access to push should be locked. | n/a    | <a href="https://git.clever-touch.com/insights-testing/kainos/acquisition-migration/-/tree/main">main</a>                                         |
+| dev | Not currently used. | n/a | n/a                                                                                                                                               |
+| feature_initial_creation | This is where most of the development work will happen. | WIP | <a href="https://git.clever-touch.com/insights-testing/kainos/acquisition-migration/-/tree/feature_initial_creation">feature_initial_creation</a> |
+
 
 ### 2.2 How to branch 
 
@@ -241,10 +271,10 @@ Need to add details here.
 # 4. Version Control
 #### [Go To Top](#table-of-contents "Go To Top")
 
-| Version number | Change  | Description | Supporting documentation/links
-| :-- | :-- | :--
-Example Text 1 | Placeholder text | Placeholder text |
-Example Text 2 | Placeholder text | Placeholder text |
+| Version Number    | Change | Description |
+|-------------------|--------|-------------|
+| main.py (example) | n/a    | n/a         |
+
 
 
 
