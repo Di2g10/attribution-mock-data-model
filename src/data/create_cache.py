@@ -1,10 +1,12 @@
-import src.data.extract_and_cache_data
+import src
+from src.connectors.snowflake import query
+
 
 def blackline_data():
     hs_deals = "Select * from KAINOS_DB.HUBSPOT_BLACKLINE_PROD.DEAL"
     hs_contacts = "Select * from KAINOS_DB.HUBSPOT_BLACKLINE_PROD.CONTACT"
-    deals = src.data.extract_and_cache_data.fetch_object_from_snowflake(hs_deals)
-    contacts = src.data.extract_and_cache_data.fetch_object_from_snowflake(hs_contacts)
+    deals = src.connectors.snowflake.query(hs_deals)
+    contacts = src.connectors.snowflake.query(hs_contacts)
 
     print(deals)
     print(contacts)
@@ -15,8 +17,8 @@ def blackline_data():
 def formulate_data():
     hs_deals = "Select * from KAINOS_DB.HUBSPOT_FORMULATE_PROD.DEAL"
     hs_contacts = "Select * from KAINOS_DB.HUBSPOT_FORMULATE_PROD.CONTACT"
-    deals = src.data.extract_and_cache_data.fetch_object_from_snowflake(hs_deals)
-    contacts = src.data.extract_and_cache_data.fetch_object_from_snowflake(hs_contacts)
+    deals = src.connectors.snowflake.query(hs_deals)
+    contacts = src.connectors.snowflake.query(hs_contacts)
 
     print(deals)
     print(contacts)
