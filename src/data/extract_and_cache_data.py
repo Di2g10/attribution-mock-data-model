@@ -8,11 +8,6 @@ import pandas as pd
 from pathlib import Path
 
 
-
-# data_storage_path =
-
-# Importing
-
 def hard_cache_df(cache_days):
     def hard_cache_df_limit(func):
         @functools.wraps(func)
@@ -62,12 +57,6 @@ def query_sf(sql):
     cs.execute(sql)
     df = cs.fetch_pandas_all()
     return df
-
-# Function 1: Fetch the account object from Snowflake
-
-def fetch_object_from_snowflake(get_all_object_sql):
-    df_object = query_sf(get_all_object_sql)
-    return df_object
 
 
 
