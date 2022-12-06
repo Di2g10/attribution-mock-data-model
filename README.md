@@ -1,13 +1,78 @@
-# Basic Project Template
+# Kainos Acquisitions Migration
 
 
+# Table of Contents
 
-## Getting started
+- [1. Getting started](#getting-started)
+- [2. Task brief](#task-brief)
+  - [2.1. Supporting documentation](#supporting)
+  - [2.2 Folder Locations](#folder-locations)
+  - [2.3 Getting set up](#gsu)
+  - [2.4 File descriptions](#fd)
+  - [2.5 Project Status](#ps)
+  - [2.6 Bugs](#bugs)
+- [3. Branches](#branches)
+  - [3.1. This projects branches](#this-projecs-branches)
+  - [3.2 How to branch](#how-to)
+- [4. Committing changes](#cc)
+- [5. Version control](#vc)
+- [6. Validation checks](#val)
+
+#### [Go To Top](#table-of-contents "Go To Top")
+<a name="getting-started"></a>
+
+## 1. Getting started
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.
 
 Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
 
+## Project Organisation
+
+```
+├── LICENSE
+├── Makefile           <- Makefile with commands like `make data` or `make train`
+├── README.md          <- The top-level README for developers using this project.
+├── data
+│   ├── external       <- Data from third party sources.
+│   ├── interim        <- Intermediate data that has been transformed.
+│   ├── output         <- The final, canonical data sets for Uploading.
+│   └── raw            <- The original, immutable data dump.
+│
+├── docs               <- Project Supporting Documents outlining structure or concepts
+│
+├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
+│                         the creator's initials, and a short `-` delimited description, e.g.
+│                         `1.0-jqp-initial-data-exploration`.
+│
+├── references         <- Data dictionaries, Field Mappings, and all other explanatory materials.
+│
+├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
+│   └── figures        <- Generated graphics and figures to be used in reporting
+│
+├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
+│                         generated with `pip freeze > requirements.txt`
+│
+├── setup.py           <- Make this project pip installable with `pip install -e`
+├── src                <- Source code for use in this project.
+│   ├── __init__.py    <- Makes src a Python module
+│   │
+│   ├── data           <- Scripts to download or generate data
+│   │   └── make_dataset.py
+│   │
+│   ├── features       <- Scripts to turn raw data into features for modeling
+│   │   └── build_features.py
+│   │
+│   ├── models         <- Scripts to train models and then use trained models to make
+│   │   │                 predictions
+│   │   ├── predict_model.py
+│   │   └── train_model.py
+│   │
+│   └── visualization  <- Scripts to create exploratory and results oriented visualizations
+│       └── visualize.py
+│
+└── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
+```
 ## Add your files
 
 - [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
@@ -51,8 +116,6 @@ When you're ready to make this README your own, just edit this file and use the 
 ## Suggestions for a good README
 Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
-## Name
-Choose a self-explaining name for your project.
 
 ## Description
 Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
@@ -90,3 +153,135 @@ For open source projects, say how it is licensed.
 
 ## Project status
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+
+
+
+#### [Go To Top](#table-of-contents "Go To Top")
+
+<a name="task-brief"></a>
+
+# 2. Task brief
+
+### 2.1 Supporting Documentation
+
+Workfront Task(/s) - 
+
+Specific migration task - https://clevertouchops.my.workfront.com/task/63455e8400ab6f57e8a899f55ded7e25
+
+Overall project task - https://clevertouchops.my.workfront.com/project/63455e2100ab4a52f6daae164d05f151/tasks
+
+
+
+### 2.2 Folder Locations
+
+Kainos sharepoint folder - https://clevertouch.sharepoint.com/:f:/s/Kainos/EnoQR6KZp2hFj_mYvhwFNB0Bctl2XdLW9rwWGREaAUQ-6Q?e=s3rGhH
+
+Kainos mapping document folder - https://clevertouch.sharepoint.com/:f:/s/Kainos/EswM4OlcdsdEuV6WgFeexdUBFDHgk-6DNNGKbR-zbGNkUQ?e=zOSSiz
+
+### 2.3 Getting set up
+See branches for details on creating a branch
+
+1. You will need to create a config.py file and populate it with password information. CHECK THIS FILE IS ADDED TO GITIGNORE
+2. Clone this down to your working enviornment ensuring you set up a virtual environment. 
+   1. A straight clone using VCS wont set it up with one so you will have to activate it in the settings
+   2. You may also need BTP (or whatever IT supplier) to set up a path in your operating system environment
+3. Install requirements using 
+
+
+    pip install -r requirements.txt
+
+
+### 1.4 File descriptions
+
+A breakdown of the files you can find and what they do. It will ignore gitignore/readme/requirements.txt files.
+
+
+| Script | Description                                                                     | Status |
+|------------------------|---------------------------------------------------------------------------------|--------|
+| main.py       | I have tried to create a main script that pulls other scripts based on prompts. | wip    |
+
+
+### 1.5 Project status
+01/12/2022 
+
+- Currently able to extract data from snowflake and store it as a cache.
+- The main.py file has been set up to call functions from other scripts.
+- Still waiting to get access to Intutitve hubspot instance
+- Need to connect to dynamics 365 and pull in data
+
+
+
+### 1.6 Bugs
+
+| Script/location of bug | Description | Status | Assigned to fix |
+|------------------------|-------------|--------|-----------------|
+| main.py (example)      | n/a         | n/a    | n/a             |
+
+
+<a name="branches"></a>
+
+# 2. Branches
+#### [Go To Top](#table-of-contents "Go To Top")
+
+
+### 2.1 This projects branches
+<a href=" ADD WEBSITE LINK HERE ">Main</a> - This is considered the live branch. You should not make any changes within this branch.
+
+<a href=" ADD WEBSITE LINK HERE ">Development</a> - You should create a branch from here for any development work. The work can then be peer
+reviewed and pushed to main once checked. You should always branch from here. 
+
+Other branches - You may see other branches but the two above are the main branches.
+
+https://git.clever-touch.com/insights-testing/kainos/acquisition-migration/-/tree/feature_initial_creation
+
+
+| Script/location of bug | Description                                                                                            | Status | Link                                                                                                                                              | 
+|------------------------|--------------------------------------------------------------------------------------------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------| 
+| main      | Do not push to this branch unless it has been approved. In most cases access to push should be locked. | n/a    | <a href="https://git.clever-touch.com/insights-testing/kainos/acquisition-migration/-/tree/main">main</a>                                         |
+| dev | Not currently used. | n/a | n/a                                                                                                                                               |
+| feature_initial_creation | This is where most of the development work will happen. | WIP | <a href="https://git.clever-touch.com/insights-testing/kainos/acquisition-migration/-/tree/feature_initial_creation">feature_initial_creation</a> |
+
+
+### 2.2 How to branch 
+
+
+<a name="cc"></a>
+
+# 3. Committing changes
+#### [Go To Top](#table-of-contents "Go To Top")
+
+### Git Terminal Commands
+If you are happy with the changes you can commit them to git lab quickly by using the following commands.
+
+Please not however, that adding ALL files may not be ideal. You may have files you dont want to push like your config and or password files. If you are happy that you can safely commit all files then you can use these commands.
+
+1. In the terminal
+2. Type "git add .". This will add ALL files to be pushed to gitlab.
+3. Type "git commit -m"<enter text explaining changes to files here>". This will attach a message to those files.
+4. Type "git push". This will push the files to git lab.
+
+### Python Committing
+
+Need to add details here.
+
+
+<a name="vc"></a>
+
+# 4. Version Control
+#### [Go To Top](#table-of-contents "Go To Top")
+
+| Version Number    | Change | Description |
+|-------------------|--------|-------------|
+| main.py (example) | n/a    | n/a         |
+
+
+
+
+<a name="val"></a>
+
+# 5. Validation Checks
+#### [Go To Top](#table-of-contents "Go To Top")
+
+A document containing all the validation checks can be found <a href=" ADD LINK HERE ">here</a>.
+
