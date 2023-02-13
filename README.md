@@ -25,7 +25,7 @@
 
 - Create Venv if one doesn't already exist.
 - Activate Venv if neccessary 
-- install Requirements 'pip install -r requirements.txt'
+- Install Requirements 'pip install -r requirements.txt'
 - Copy config_example.py into config.py
   - Add passwords to config.py
   - Check project file path matches for you machine and the relevant folders are synced locally.
