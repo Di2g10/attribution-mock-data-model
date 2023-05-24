@@ -1,92 +1,43 @@
-# Basic Project Template
+# Fujitsu Pardot Upload Tool
+This tool currently handles the folder organisation, data preparation, and checks required by the Fujitsu upload process.
+
+This tool does not upload the data to Pardot. This step is currently still a manual step.
+
+## This tool will:
+- Read the Fujitsu upload tracker (https://clevertouch.sharepoint.com/:x:/s/Fujitsu/EXtoYvpDa3ZOq6dooBzYzq0BqP0u91p9jdBT3Ld7vrVtwg?e=CzU79U).
+- Validate whether the upload tracker has been filled in correctly.
+- Create a folder for the upload. This folder will store the raw data, any mid-steps and the prepared data that is ready for upload.
+- Map fields from the raw data to those in the relevant Fujitsu Pardot instance.
+- Map any values in picklist fields to the accepted values.
+- Check the formatting of date and number values.
+- Check that records have the required fields populated.
+- Check whether opted in records have an opt-in date and an opt-in source.
+
+## How to run the process:
+The aim of this tool is to provide enough prompts and error messaging that it can be run without detailed context of the process.
+If any part of the process is unclear, please reach out to Jake Campling.
+
+1. Click "Run"
+2. You will be shown the details of all uploads in the upload tracker that have a status of "Requested". Type the number of the upload you want to run.
+3. If prompted to do so; map any unmapped fields in this spreadsheet: https://clevertouch.sharepoint.com/:x:/s/Fujitsu/EUrrWT8bPX5CloNezPxJdyIBecFWZzbO0iB4YEPud86Xow?e=yYZ2pW
+   1. If you want a fields in the data to be ignored, just map it to "IGNORE".
+4. Once all fields in the data have a mapping, you will be prompted to "Please review the mappings above."
+5. Once you are happy with the field mappings show, type "y" and hit enter.
+6. If prompted to do so; map any unmapped picklist values.
+   1. The values you need to map will be found in the upload folder in a csv ending in "picklist_values_to_map"
+   2. Add the values to the picklist mapping spreadsheet: https://clevertouch.sharepoint.com/:x:/s/Fujitsu/EdGNXy_vUf1Flvz1FHZAHUIBlHNDKIZeBuEpGEN2y6YspA?e=zXCSa2
+   3. Values can be mapped to an empty string if there is no valid match.
+7. Once all picklist values in the data have a mapping, you will be prompted check whether you are happy with the resulting values from the mapping.
+8. Once you are happy with the resulting picklist values, type "y" and hit enter.
+9. The tool will then print the details of any date or number formatting that has occurred. Check whether any data has been lost (same number of nulls before formatting as after formatting). 
+   1. Example message here:
+      ```
+      Date formatting completed for: Email Opt In Date 
+      Nulls before: 0-> Null count after: 0
+      ```
+10. The tool will print the number of opted in rows with valid source and date values
+11. The tool will check whether the records have the required fields populated. It will either print "All records had required fields populated", or it will print the number of records that have been dropped due to insufficient data.
+12. The tool will print "File is ready for upload!", followed by the file path of your cleaned and prepared data.
+13. Upload your data to Pardot and marvel at the lack of upload or sync errors.
 
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://git.clever-touch.com/insights-testing/project-templates/basic-project-template.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://git.clever-touch.com/insights-testing/project-templates/basic-project-template/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
