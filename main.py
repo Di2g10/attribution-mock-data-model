@@ -31,11 +31,6 @@ def main():
     # Make a list of the fields in the data
     fields_in_data = get_list_of_fields_in_data(field_object_list)
 
-    # fields_in_data = []
-    # for field in field_list:
-    #     if field.field_values is not None:
-    #         fields_in_data.append(field)
-
     # Picklist mapping
     picklist_list = read_picklists()
 
