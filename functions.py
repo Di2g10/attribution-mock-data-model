@@ -10,6 +10,7 @@ from datetime import *
 from dateutil import parser
 import io
 import numpy as np
+import warnings
 
 
 class Region(Enum):
@@ -33,6 +34,9 @@ class Upload:
 
 
 def read_upload_tracker():
+    # Set to ignore user warnings
+    warnings.simplefilter("ignore", category=UserWarning)
+
     # Read the Excel file using pandas
     upload_tracker_df = pd.read_excel(PROJECT_FOLDER / 'Upload Tracker V3.xlsx')
     # Create a list to store the class objects
@@ -49,8 +53,11 @@ def read_upload_tracker():
         excel_sheet_name = row['Excel Sheet Name']
         excel_password = row['Excel Password']
 
-        upload_object = Upload(number, name, target_date, region, status, file_path, excel_sheet_name, excel_password)
+        upload_object = Upload(number, name, target_date.strftime("%Y-%m-%d"), region, status, file_path, excel_sheet_name, excel_password)
         uploads_list.append(upload_object)
+
+    # Reset warning settings
+    warnings.resetwarnings()
 
     return uploads_list
 
