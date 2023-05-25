@@ -11,6 +11,7 @@ from dateutil import parser
 import io
 import numpy as np
 import warnings
+import re
 
 
 class Region(Enum):
@@ -566,7 +567,8 @@ def validate_permission_values(upload_object: Upload):
                 (df[opt_in_field] == '1') & ((df[opt_in_date_field].isnull()) | (df[opt_in_source_field].isnull()))]
             invalid_rows = invalid_rows[['Email', opt_in_field, opt_in_date_field, opt_in_source_field]]
         else:
-            raise ValueError("Opt In field found, but a Source or Date field is missing.")
+            print("Opt In field found, but a Source or Date field is missing.")
+            print(invalid_rows.to_markdown())
             quit()
     else:
         print("No Opt In field found.")
@@ -574,8 +576,8 @@ def validate_permission_values(upload_object: Upload):
     # TODO: Add checks for double opt ins
 
     if len(invalid_rows) > 0:
+        print(str(len(invalid_rows)) + " Opted In Records found missing source or date:")
         print(invalid_rows.to_markdown())
-        raise ValueError("Opted In Records found missing source or date:")
         quit()
     else:
         print(str(len(df[df[opt_in_field] == '1'])) + " opted in rows with valid source and date values")
