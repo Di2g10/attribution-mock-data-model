@@ -138,6 +138,14 @@ def set_up_upload_folder(upload: object):
 
 
 def get_source_data(upload):
+    # Change username in filepath
+    file_path = str(upload.source_data_path)
+    file_path_end = '\CleverTouch' + file_path.split('\CleverTouch')[1]
+    file_path_new = 'C:\\Users\\' + os.getlogin() + file_path_end
+    # Update the filepath on the upload object
+    upload.source_data_path = Path(file_path_new)
+
+    print("Retrieving data from " + str(upload.source_data_path))
     try:
         # Read CSV files
         if upload.source_data_path.suffix.lower() == '.csv':
