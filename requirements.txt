@@ -1,0 +1,4 @@
+pandas
+black
+ruff
+pre-commit
