@@ -3,7 +3,6 @@ import unittest
 
 
 class MyTestCase(unittest.TestCase):
-
     """Teeds Updating."""
 
     def test_something(self):

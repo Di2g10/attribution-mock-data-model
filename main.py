@@ -1,5 +1,8 @@
+"""Contains the main code runner for the project."""
+
 
 def main():
+    """Run end to end code."""
     raise NotImplementedError
 
 
