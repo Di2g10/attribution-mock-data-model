@@ -370,6 +370,7 @@ def clean_date_values(value, date_format_string):
     :param value: The incoming data value.
     :return: A datetime value.
     """
+    cleaned_value = None
     try:
         # Check whether value is a timestamp
         if isinstance(value, int):
