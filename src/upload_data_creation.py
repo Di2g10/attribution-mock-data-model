@@ -61,6 +61,7 @@ def program_valid(df: pd.DataFrame, client_campaign_name: str):
     Ensures the program names are valid; that they're programs in Marketo
     df: dataframe with leads in with the fields renamed
     client_campaign_name: The campaign name as called by the client. One of three:
+    'ACTC', 'PI' or 'Training'
     """
     #print('original',df)
     #WHEN FOLDER NAME = ACTC
