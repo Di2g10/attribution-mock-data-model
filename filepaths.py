@@ -48,5 +48,18 @@ workspace_directory_general = Path("C://",
                             "Product Data Ingestion",
                             "Jira AS-111")
 
+workspace_directory_output_invalid_lists = Path("C://",
+                           "Users",
+                           os.getlogin(),
+                           "CleverTouch",
+                           "AVEVA - Documents",
+                           "93806_AVEVA_Managed Service 2023",
+                           "Support Requests",
+                           "08 August",
+                            "Product Data Ingestion",
+                            "Jira AS-111",
+                           "03_Output",
+                            "Invalid Lists")
+
 
 
