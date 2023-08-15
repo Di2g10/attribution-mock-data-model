@@ -1,5 +1,11 @@
+import pandas as pd
+import filepaths as fpath
+pd.set_option('display.max_columns', None)
 
-
+df = pd.read_excel(fpath.workspace_directory_input / 'Training Manager_January_2018 to February 2023.xlsx',
+                   sheet_name='2018-2022 Sept')
+df_sample = df.head(10)
+print(df_sample)
 
 
 

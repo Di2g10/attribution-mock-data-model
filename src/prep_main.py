@@ -4,9 +4,11 @@ import filepaths as fpath
 from datetime import date
 from upload_data_creation import import_data, rename_fields, field_value_mapping, list_name
 
-
+# Snapshot saved to C:\Users\AnneYoung\AppData\Local\JetBrains\PyCharm2023.1\snapshots\aveva-marketo-dedupe.pstat
 def main():
     campaigns = ['ACTC', 'PI', 'Training']
+
+
     #campaigns = ['Training']
     campaign_to_file_mapping = {"ACTC": 'ACTC Course Registration - July 2022 to March 2023.xlsx',
                                 "PI": 'PI Course Registration Information - Dec 2022 to Feb 2023.xlsx',
