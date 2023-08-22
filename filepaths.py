@@ -10,7 +10,6 @@ workspace_directory_mapping = Path("C://",
                            "Support Requests",
                            "08 August",
                             "Product Data Ingestion",
-                            "Jira AS-111",
                            "01_Mapping Files")
 
 workspace_directory_input = Path("C://",
@@ -22,8 +21,18 @@ workspace_directory_input = Path("C://",
                            "Support Requests",
                            "08 August",
                             "Product Data Ingestion",
-                            "Jira AS-111",
                            "02_Input")
+
+workspace_directory_process = Path("C://",
+                           "Users",
+                           os.getlogin(),
+                           "CleverTouch",
+                           "AVEVA - Documents",
+                           "93806_AVEVA_Managed Service 2023",
+                           "Support Requests",
+                           "08 August",
+                            "Product Data Ingestion",
+                           "03_Process")
 
 workspace_directory_output = Path("C://",
                            "Users",
@@ -34,8 +43,7 @@ workspace_directory_output = Path("C://",
                            "Support Requests",
                            "08 August",
                             "Product Data Ingestion",
-                            "Jira AS-111",
-                           "03_Output")
+                           "04_Output")
 
 workspace_directory_general = Path("C://",
                            "Users",
@@ -45,8 +53,7 @@ workspace_directory_general = Path("C://",
                            "93806_AVEVA_Managed Service 2023",
                            "Support Requests",
                            "08 August",
-                            "Product Data Ingestion",
-                            "Jira AS-111")
+                            "Product Data Ingestion")
 
 workspace_directory_output_invalid_lists = Path("C://",
                            "Users",
@@ -57,8 +64,7 @@ workspace_directory_output_invalid_lists = Path("C://",
                            "Support Requests",
                            "08 August",
                             "Product Data Ingestion",
-                            "Jira AS-111",
-                           "03_Output",
+                           "04_Output",
                             "Invalid Lists")
 
 

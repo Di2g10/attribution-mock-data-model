@@ -1,11 +1,39 @@
 import pandas as pd
-import filepaths as fpath
 pd.set_option('display.max_columns', None)
+import filepaths as fpath
+from datetime import date
+from extraction import bulk_lead_extract_to_file
 
-df = pd.read_excel(fpath.workspace_directory_input / 'Training Manager_January_2018 to February 2023.xlsx',
-                   sheet_name='2018-2022 Sept')
-df_sample = df.head(10)
-print(df_sample)
+def main():
+    fields = ['id', 'email', 'pmi_MCL_Date__c']
+    bulk_lead_extract_to_file(fields=fields,
+                              filter_type='smartListId',
+                              filter_value='751814',
+                              output_directory=fpath.workspace_directory_process,
+                              output_filename='date_format_find')
+
+if __name__ == '__main__':
+    main()
+
+
+
+# import pandas as pd
+# import filepaths as fpath
+# pd.set_option('display.max_columns', None)
+
+# df = pd.read_excel(fpath.workspace_directory_input / 'Training Manager_January_2018 to February 2023.xlsx',
+#                    sheet_name='2018-2022 Sept')
+#
+# # start_index = 63000
+# # end_index = 65000
+# #
+# # df_sample = df.iloc[start_index:end_index]
+#
+# df_sample = df[df['E-mail'] == 'andrew.j.ramsden@sellafieldsites.com']
+# df_sample = df_sample[df_sample['Course Name'] =='AVEVA E3D 2.1 User Overview & Admin']
+# print(df_sample)
+# output_file_name = 'Taining_sample.xlsx'
+# df_sample.to_excel(fpath.workspace_directory_output / output_file_name, index=False)
 
 
 
