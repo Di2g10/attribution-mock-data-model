@@ -85,6 +85,35 @@ def field_value_mapping(df: pd.DataFrame,
         print(f"Values in '{column}' column for {campaign} have been mapped and written to '{output_file_name}'.")
     return df
 
+def custom_parse(date_str):
+    # Define a list of regular expressions for different formats
+    formats = [
+         r'\d{2}-\d{2}-\d{4}',  # dd-mm-yyyy
+         r'\d{2}/\d{2}/\d{4}',  # dd/mm/yyyy
+    ]
+
+    # Try each regular expression to match the format
+    for fmt in formats:
+        match = re.match(fmt, date_str)
+        if match:
+            return match.group(0)
+    return None
+
+def fix_dates(df: pd.DataFrame,
+                  campaign: str):
+     """
+     Fill this in
+     """
+     if campaign == 'ACTC':
+         df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format="mixed", dayfirst=True)
+     campaign_to_dateformat_mapping = {"ACTC": "%d/%m/%Y %H:%M:%S",
+                                      "PI": "%m/%d/%Y %H:%M:%S",
+                                      "Training": "%m/%d/%Y"}
+     format=campaign_to_dateformat_mapping[campaign]
+     df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format=format, errors='coerce')
+     df['pmi_MCL_Date__c'] = df['pmi_MCL_Date__c'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+     return df
+
 
 def list_name(df: pd.DataFrame,
               lvc_file_name: str,
@@ -106,9 +135,10 @@ def list_name(df: pd.DataFrame,
     df['List_Name_Part_One'] = df['List_Name_Part_One'].fillna('#N/A') #Fill na with #NA value
     df['List_Name_Part_One'] = df['List_Name_Part_One'].apply(lambda x: str(x).strip() if isinstance(x, str) else str(x)) #trim if string
     list_value_df['List Name Part One'] = list_value_df['List Name'].str.split(' -').str[0] #select part one of list from lookup df
+    df['List_Name_Part_One'] = df['List_Name_Part_One'].str.split(' -').str[0] #ensure same part is brought back for campaign data
     valid_list_po_names = list_value_df['List Name Part One'].unique()#list of valid names
     valid_list_po_names = [str(name) for name in valid_list_po_names] #converts to string
-    # target_value = '17000704444'
+    # target_value = 'CITEL409105'
     # for name in valid_list_po_names:
     #     if name == target_value:
     #         print('valid_target_value:', name)
@@ -150,52 +180,13 @@ def obtain_list_prog_ids(df: pd.DataFrame,
                                   sheet_name=lvc_sheet_name,
                                   usecols=['Program Name', 'List Name', 'Program ID', 'List ID'])
     list_value_df['List_Name_Part_One'] = list_value_df['List Name'].str.split(' -').str[0] #select part one of list from lookup df
+    df['List_Name_Part_One'] = df['List_Name_Part_One'].str.split(' -').str[0]  # ensure same part is brought back for campaign data
     df = pd.merge(df, list_value_df, how='left', on='List_Name_Part_One')
     df['Program ID'] = df['Program ID'].astype(str)
     df['Program ID'] = df['Program ID'].str.replace('.0', '')
     df['List ID'] = df['List ID'].astype(str)
     df['List ID'] = df['List ID'].str.replace('.0', '')
     print('obtain_list_prog_ids_df', df)
-    return df
-
-
-def custom_parse(date_str):
-    # Define a list of regular expressions for different formats
-    formats = [
-        r'\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}',  # dd-mm-yyyy hh:mm:ss
-        r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}',  # dd/mm/yyyy hh:mm:ss
-        r'\d{2}-\d{2}-\d{4}',  # dd-mm-yyyy
-        r'\d{2}/\d{2}/\d{4}',  # dd/mm/yyyy
-    ]
-
-
-    # Try each regular expression to match the format
-    for fmt in formats:
-        match = re.match(fmt, date_str)
-        if match:
-            return match.group(0)
-    return None
-
-
-def fix_dates_series(series: pd.Series) -> pd.DataFrame:
-    """
-    Fix the date field
-    df: dataframe with leads in with the fields named to match Marketo API
-    """
-    series_out = series.copy()
-    # series_out = series_out.apply(custom_parse)
-    #series_out = pd.to_datetime(series_out, errors='coerce')
-    series_out = pd.to_datetime(series_out, format="mixed", dayfirst=True)
-    # df['pmi_MCL_Date__c_new2'] = df['pmi_MCL_Date__c_new'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-    return series_out
-
-def fix_dates(df: pd.DataFrame):
-    """
-    Fix the date field
-    df: dataframe with leads in with the fields named to match Marketo API
-    """
-    df['pmi_MCL_Date__c_new'] = pd.to_datetime(df['pmi_MCL_Date__c'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df['pmi_MCL_Date__c_new2'] = df['pmi_MCL_Date__c_new'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
     return df
 
 

@@ -27,17 +27,15 @@ def main():
         values_mapped_df = field_value_mapping(df=rename_df, vm_file_name='Field Mapping_V7.xlsx', columns_to_map_values=['country', 'state', 'pmi_Preferred_Language__c'], campaign=campaign)
         list_name_df = list_name(df=values_mapped_df, lvc_file_name='Aveva API Import ID_s.xlsx', campaign=campaign)
         obtain_list_prog_ids_df = obtain_list_prog_ids(df=list_name_df, lookup_file_name='Aveva API Import ID_s.xlsx', campaign=campaign)
+        fix_dates_df = fix_dates(obtain_list_prog_ids_df, campaign)
         output_file_name = f'{campaign}_output.xlsx'
-        obtain_list_prog_ids_df.to_excel(fpath.workspace_directory_output / output_file_name, index=False)
-        obtain_list_prog_ids_df['Campaign'] = campaign
-        campaign_df[campaign] = obtain_list_prog_ids_df
+        fix_dates_df.to_excel(fpath.workspace_directory_output / output_file_name, index=False)
+        fix_dates_df['Campaign'] = campaign
+        campaign_df[campaign] = fix_dates_df
     combined_df = pd.concat([campaign_df['ACTC'],campaign_df['PI'], campaign_df['Training']], ignore_index=True)
     # Below outputs combined file
-    # output_file_name = 'combined_output.xlsx'
-    # combined_df.to_excel(fpath.workspace_directory_output / output_file_name, index=False)
-    fix_date_df = fix_dates(df=combined_df)
-    output_file_name = 'date_output.xlsx'
-    fix_date_df.to_excel(fpath.workspace_directory_output / output_file_name, index=False)
+    output_file_name = 'combined_output.xlsx'
+    combined_df.to_excel(fpath.workspace_directory_output / output_file_name, index=False)
     # Pull the people from Marketo
     fields = ['id', 'email']
     # bulk_lead_extract_to_file(fields=fields,
@@ -45,8 +43,8 @@ def main():
     #                           filter_value='751814',
     #                           output_directory=fpath.workspace_directory_process,
     #                           output_filename='lead_extract1')
-    existing_records_df = existing_records(df=fix_date_df, marketo_people_filename='lead_extract1.csv')
-    new_records_df = new_records(df = fix_date_df, marketo_people_filename='lead_extract1.csv')
+    existing_records_df = existing_records(df=fix_dates_df, marketo_people_filename='lead_extract1.csv')
+    new_records_df = new_records(df = fix_dates_df, marketo_people_filename='lead_extract1.csv')
 # upload existing people file
 # upload new people file
 # pull all people down again
