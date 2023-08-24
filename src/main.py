@@ -3,6 +3,7 @@ pd.set_option('display.max_columns', None)
 import filepaths as fpath
 from datetime import date
 from extraction import bulk_lead_extract_to_file
+import src
 from upload_data_transformation import import_data, rename_fields, field_value_mapping, list_name, obtain_list_prog_ids, fix_dates, existing_records, new_records
 
 # Snapshot saved to C:\Users\AnneYoung\AppData\Local\JetBrains\PyCharm2023.1\snapshots\aveva-marketo-dedupe.pstat
@@ -44,12 +45,17 @@ def main():
     #                           output_directory=fpath.workspace_directory_process,
     #                           output_filename='lead_extract1')
     existing_records_df = existing_records(df=fix_dates_df, marketo_people_filename='lead_extract1.csv')
-    new_records_df = new_records(df = fix_dates_df, marketo_people_filename='lead_extract1.csv')
+    # new_records_df = new_records(df = fix_dates_df, marketo_people_filename='lead_extract1.csv')
 # upload existing people file
+#     marketo_credentials = src.function_group.credentials.Credentials(client_id=config.client_id,
+#                                                   client_secret=config.client_secret,
+#                                                   url=config.bulk_url)
+
 # upload new people file
 # pull all people down again
 # obtain people ids for email addresses
-# upload to lists/programs
+# upload to lists
+# upload to programs
 
 if __name__ == '__main__':
     main()

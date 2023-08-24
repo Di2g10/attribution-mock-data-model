@@ -86,6 +86,9 @@ def field_value_mapping(df: pd.DataFrame,
     return df
 
 def custom_parse(date_str):
+    """
+    Feeds into the fix_dates function below
+    """
     # Define a list of regular expressions for different formats
     formats = [
          r'\d{2}-\d{2}-\d{4}',  # dd-mm-yyyy
@@ -102,7 +105,9 @@ def custom_parse(date_str):
 def fix_dates(df: pd.DataFrame,
                   campaign: str):
      """
-     Fill this in
+     Puts the date into the correct format for the upload
+     df: dataframe with the correct field mapping in.
+     campaign: campaign file to be uplaoded.
      """
      if campaign == 'ACTC':
          df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format="mixed", dayfirst=True)
@@ -197,8 +202,10 @@ def existing_records(df: pd.DataFrame,
     df: dataframe with leads in with the fields names to match Marketo API
     marketo_people_filename: filename of all marketo people to check against in csv format. Will be pulled from fpath.workspace_directory_process.
     """
-    latest_indices = df.groupby('email')['pmi_MCL_Date__c'].idxmax()
-    df = df.loc[latest_indices]
+    df['pmi_MCL_Date__c_date'] =pd.to_datetime(df['pmi_MCL_Date__c'])
+    latest_indices = df.groupby('email')['pmi_MCL_Date__c_date'].idxmax()
+    df_latest_all_fields = pd.merge(df, latest_indices, how='inner', on=['email', 'pmi_MCL_Date__c_date'])
+    df = df_latest_all_fields.drop_duplicates(subset=['email'])
     marketo_df = pd.read_csv(fpath.workspace_directory_process / marketo_people_filename)
     df = df[df['email'].isin(marketo_df['email'])]
     print("existing_records_df", df)
@@ -218,15 +225,17 @@ def new_records(df: pd.DataFrame,
     df: dataframe with leads in with the fields names to match Marketo API
     marketo_people_filename: filename of all marketo people to check against in csv format. Will be pulled from fpath.workspace_directory_process.
     """
-    earliest_indices = df.groupby('email')['pmi_MCL_Date__c'].idxmin()
-    earliest_df = df.loc[earliest_indices]
-    earliest_df['Detailed_Lead_Source__c'] = df['Program Name'] + '.' + df['List Name']
-    earliest_df['pmi_MCL_Campaign__c'] = df['Program Name'] + '.' + df['List Name']
-    latest_indices = df.groupby('email')['pmi_MCL_Date__c'].idxmax()
-    latest_df = df.loc[latest_indices]
-    latest_df = latest_df[['email']]
-    latest_df['Dynamic_Detailed_Lead_Source__c'] = df['Program Name']+'.'+df['List Name']
-    df = pd.merge(earliest_df, latest_df, on='email', how='inner')
+    df['pmi_MCL_Date__c_date'] = pd.to_datetime(df['pmi_MCL_Date__c'])
+    earliest_indices = df.groupby('email')['pmi_MCL_Date__c_date'].idxmin()
+    df_earliest_all_fields = pd.merge(df, earliest_indices, how='inner', on=['email', 'pmi_MCL_Date__c_date'])
+    df = df_earliest_all_fields.drop_duplicates(subset=['email'])
+    df['Detailed_Lead_Source__c'] = df['Program Name'] + '.' + df['List Name']
+    df['pmi_MCL_Campaign__c'] = df['Program Name'] + '.' + df['List Name']
+    latest_indices = df.groupby('email')['pmi_MCL_Date__c_date'].idxmax()
+    df_latest = df.loc[latest_indices]
+    df_latest = df_latest[['email']]
+    df_latest['Dynamic_Detailed_Lead_Source__c'] = df['Program Name']+'.'+df['List Name']
+    df = pd.merge(df, df_latest, on='email', how='inner')
     marketo_df = pd.read_csv(fpath.workspace_directory_process/marketo_people_filename)
     df = df[~df['email'].isin(marketo_df['email'])]
     df['Dynamic_Lead_Source__c'] = 'AVEVA Virtual Event'

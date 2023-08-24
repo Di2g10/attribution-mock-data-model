@@ -26,3 +26,4 @@ def lead_upload(marketo_credentials: Credentials, data_to_upload: pd.DataFrame, 
                                                    lead_lookup=lead_lookup,
                                                    batch_size=batch_size)
     lead_upload_object.upload_leads_in_batches(data_to_upload)
+
