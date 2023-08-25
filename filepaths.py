@@ -68,4 +68,14 @@ workspace_directory_output_invalid_lists = Path("C://",
                             "Invalid Lists")
 
 
-
+log_file = Path("C://",
+                "Users",
+                os.getlogin(),
+                "CleverTouch",
+                "AVEVA - Documents",
+                "93806_AVEVA_Managed Service 2023",
+                "Support Requests",
+                "08 August",
+                "Product Data Ingestion",
+                "04_Output",
+                "api_upload_log.csv")

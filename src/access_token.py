@@ -1,18 +1,27 @@
 import datetime
+from dataclasses import dataclass
+
 import requests as re
 import config as config
+from credentials import Credentials
 
+
+@dataclass
 class AccessToken:
+    credentials: Credentials
+    expires_datetime: datetime.datetime = datetime.datetime.now()
+    wait_time = 30
     access_token: str = ''
     expires_in: int = 0
-    expires_datetime: datetime.datetime
     scope: str = ''
     token_type: str = ''
+    bulk_url: str = ''
+    rest_url: str = ''
 
     def get_marketo_access_token(self):
-        endpoint = config.identity_url + '/oauth/token'
-        data = {'client_id': config.client_id,
-                'client_secret': config.client_secret,
+        endpoint = self.credentials.identity_url + '/oauth/token'
+        data = {'client_id': self.credentials.client_id,
+                'client_secret': self.credentials.client_secret,
                 'grant_type': 'client_credentials'}
         response = re.get(endpoint, data)
         print(response.text)
@@ -21,6 +30,8 @@ class AccessToken:
         self.scope = response.json()['scope']
         self.expires_in = response.json()['expires_in']
         self.expires_datetime = datetime.datetime.now() + datetime.timedelta(0, self.expires_in)
+        self.bulk_url = self.credentials.bulk_url
+        self.rest_url = self.credentials.rest_url
         print(f"Access Token: {self.access_token}"
               f"Token Type: {self.token_type}"
               f"Scope: {self.scope}"
@@ -33,6 +44,8 @@ class AccessToken:
             self.get_marketo_access_token()
         else:
             print("Token remains valid. Continuing request.")
+
+
 
 
 if __name__ == '__main__':

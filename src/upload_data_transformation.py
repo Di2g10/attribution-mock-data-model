@@ -102,22 +102,34 @@ def custom_parse(date_str):
             return match.group(0)
     return None
 
-def fix_dates(df: pd.DataFrame,
-                  campaign: str):
-     """
-     Puts the date into the correct format for the upload
-     df: dataframe with the correct field mapping in.
-     campaign: campaign file to be uplaoded.
-     """
-     if campaign == 'ACTC':
-         df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format="mixed", dayfirst=True)
-     campaign_to_dateformat_mapping = {"ACTC": "%d/%m/%Y %H:%M:%S",
+
+def fix_dates(df: pd.DataFrame, campaign: str):
+    """
+    Puts the date into the correct format for the upload
+    df: dataframe with the correct field mapping in.
+    campaign: campaign file to be uploaded.
+    """
+    if campaign == 'ACTC':
+        df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format="mixed", dayfirst=True)
+    campaign_to_dateformat_mapping = {"ACTC": "%d/%m/%Y %H:%M:%S",
                                       "PI": "%m/%d/%Y %H:%M:%S",
                                       "Training": "%m/%d/%Y"}
-     format=campaign_to_dateformat_mapping[campaign]
-     df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format=format, errors='coerce')
-     df['pmi_MCL_Date__c'] = df['pmi_MCL_Date__c'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-     return df
+    format=campaign_to_dateformat_mapping[campaign]
+    df['pmi_MCL_Date__c'] = pd.to_datetime(df['pmi_MCL_Date__c'], format=format, errors='coerce')
+    df['pmi_MCL_Date__c'] = df['pmi_MCL_Date__c'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    # Change invalid dates
+    condition = df['pmi_MCL_Date__c'] == '1970-01-01T00:00:00Z'
+    # Set the new value for the selected rows
+    df.loc[condition, 'pmi_MCL_Date__c'] = '2022-01-31T00:00:00Z'
+
+    # test for invalid dates
+    invalid_dates = df[df['pmi_MCL_Date__c'] == '1970-01-01T00:00:00Z']
+    if len(invalid_dates) > 0:
+        print("Invalid dates found")
+        print(invalid_dates.to_markdown())
+
+    return df
 
 
 def list_name(df: pd.DataFrame,
@@ -164,7 +176,8 @@ def list_name(df: pd.DataFrame,
     print("Number of invalid List Names:", len(number_invalid_list_names_po_df))
     print(invalid_list_names_po_list)
     output_file_name = f'{campaign}_invalid_lists_output.xlsx'
-    number_invalid_list_names_po_df.to_excel(fpath.workspace_directory_output_invalid_lists / output_file_name, index=False)
+    number_invalid_list_names_po_df.to_excel(fpath.workspace_directory_output_invalid_lists / output_file_name,
+                                             index=False)
     return df
 
 
@@ -184,14 +197,15 @@ def obtain_list_prog_ids(df: pd.DataFrame,
     list_value_df = pd.read_excel(fpath.workspace_directory_mapping / lookup_file_name,
                                   sheet_name=lvc_sheet_name,
                                   usecols=['Program Name', 'List Name', 'Program ID', 'List ID'])
-    list_value_df['List_Name_Part_One'] = list_value_df['List Name'].str.split(' -').str[0] #select part one of list from lookup df
-    df['List_Name_Part_One'] = df['List_Name_Part_One'].str.split(' -').str[0]  # ensure same part is brought back for campaign data
+    # select part one of list from lookup df
+    list_value_df['List_Name_Part_One'] = list_value_df['List Name'].str.split(' -').str[0]
+    # ensure same part is brought back for campaign data
+    df['List_Name_Part_One'] = df['List_Name_Part_One'].str.split(' -').str[0]
     df = pd.merge(df, list_value_df, how='left', on='List_Name_Part_One')
     df['Program ID'] = df['Program ID'].astype(str)
     df['Program ID'] = df['Program ID'].str.replace('.0', '')
     df['List ID'] = df['List ID'].astype(str)
     df['List ID'] = df['List ID'].str.replace('.0', '')
-    print('obtain_list_prog_ids_df', df)
     return df
 
 
@@ -200,11 +214,19 @@ def existing_records(df: pd.DataFrame,
     """
     Creates a file to upload to Marketo that will update fields specified, for the exisiting records only.
     df: dataframe with leads in with the fields names to match Marketo API
-    marketo_people_filename: filename of all marketo people to check against in csv format. Will be pulled from fpath.workspace_directory_process.
+    marketo_people_filename: filename of all marketo people to check against in csv format. Will be pulled
+    from fpath.workspace_directory_process.
     """
-    df['pmi_MCL_Date__c_date'] =pd.to_datetime(df['pmi_MCL_Date__c'])
-    latest_indices = df.groupby('email')['pmi_MCL_Date__c_date'].idxmax()
-    df_latest_all_fields = pd.merge(df, latest_indices, how='inner', on=['email', 'pmi_MCL_Date__c_date'])
+
+    # Convert the 'pmi_MCL_Date__c_date' column to datetime type
+    df['pmi_MCL_Date__c_date'] = pd.to_datetime(df['pmi_MCL_Date__c'])
+
+    # Sort the DataFrame by email and date in descending order
+    df_sorted = df.sort_values(by=['email', 'pmi_MCL_Date__c_date'], ascending=[True, False])
+
+    # Use groupby to get the most recent date for each email
+    df_latest_all_fields = df_sorted.groupby('email').first().reset_index()
+
     df = df_latest_all_fields.drop_duplicates(subset=['email'])
     marketo_df = pd.read_csv(fpath.workspace_directory_process / marketo_people_filename)
     df = df[df['email'].isin(marketo_df['email'])]
@@ -213,21 +235,27 @@ def existing_records(df: pd.DataFrame,
     df = pd.merge(df, marketo_df, how='left', on='email')
     df = df.drop(columns='email')
     df['nonmarketable'] = 'False'
-    output_file_name = 'Existing_upload.xlsx'
-    df.to_excel(fpath.workspace_directory_output / output_file_name,
-                                             index=False)
+    output_file_name = 'Existing_upload.csv'
+    df.to_csv(fpath.workspace_directory_output / output_file_name, index=False)
     return df
 
-def new_records(df: pd.DataFrame,
-                marketo_people_filename: str):
+
+def new_records(df: pd.DataFrame, marketo_people_filename: str):
     """
     Creates a file to upload to Marketo with the fields required for new people
     df: dataframe with leads in with the fields names to match Marketo API
-    marketo_people_filename: filename of all marketo people to check against in csv format. Will be pulled from fpath.workspace_directory_process.
+    marketo_people_filename: filename of all marketo people to check against in csv format.
+    Will be pulled from fpath.workspace_directory_process.
     """
+    # Convert the 'pmi_MCL_Date__c_date' column to datetime type
     df['pmi_MCL_Date__c_date'] = pd.to_datetime(df['pmi_MCL_Date__c'])
-    earliest_indices = df.groupby('email')['pmi_MCL_Date__c_date'].idxmin()
-    df_earliest_all_fields = pd.merge(df, earliest_indices, how='inner', on=['email', 'pmi_MCL_Date__c_date'])
+
+    # Sort the DataFrame by email and date in descending order
+    df_sorted = df.sort_values(by=['email', 'pmi_MCL_Date__c_date'], ascending=[True, False])
+
+    # Use groupby to get the first date for each email
+    df_earliest_all_fields = df_sorted.groupby('email').last().reset_index()
+
     df = df_earliest_all_fields.drop_duplicates(subset=['email'])
     df['Detailed_Lead_Source__c'] = df['Program Name'] + '.' + df['List Name']
     df['pmi_MCL_Campaign__c'] = df['Program Name'] + '.' + df['List Name']
@@ -236,14 +264,26 @@ def new_records(df: pd.DataFrame,
     df_latest = df_latest[['email']]
     df_latest['Dynamic_Detailed_Lead_Source__c'] = df['Program Name']+'.'+df['List Name']
     df = pd.merge(df, df_latest, on='email', how='inner')
+
+    # Read current marketo data
     marketo_df = pd.read_csv(fpath.workspace_directory_process/marketo_people_filename)
+    # Take records not in current marketo data
     df = df[~df['email'].isin(marketo_df['email'])]
+
+    # Set manual values
     df['Dynamic_Lead_Source__c'] = 'AVEVA Virtual Event'
     df['leadSource'] = 'AVEVA Virtual Event'
     df['pmi_Original_Campaign_Source__c'] = 'Training'
     df['pmi_Campaign_Source__c'] = 'Training'
     df['nonmarketable'] = 'True'
-    output_file_name = 'New_upload.xlsx'
-    df.to_excel(fpath.workspace_directory_output / output_file_name,
-                                             index=False)
+    output_file_name = 'New_upload.csv'
+    df.to_csv(fpath.workspace_directory_output / output_file_name, index=False, encoding='utf-8')
+
     return df
+
+
+
+
+
+
+
