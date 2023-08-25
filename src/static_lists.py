@@ -80,4 +80,4 @@ class ListUpload:
                 writer.writerow(log_row)
 
             progress_bar.update(1)
-            time.sleep(60)
+            time.sleep(30)
