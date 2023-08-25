@@ -52,10 +52,10 @@ class ListUpload:
         num_batches = num_of_additions / batch_size
         num_batches = math.ceil(num_batches)
 
-        print('Function will execute ' + str(num_of_additions) + ' value changes, across ' + str(
-            num_batches) + ' batches')
-        total_iterations = num_batches
-        progress_bar = tqdm(total=total_iterations)
+        # print('Function will execute ' + str(num_of_additions) + ' value changes, across ' + str(
+        #     num_batches) + ' batches')
+        # total_iterations = num_batches
+        # progress_bar = tqdm(total=total_iterations)
 
         for batch in range(num_batches):
             # Run upload for each batch
@@ -79,5 +79,5 @@ class ListUpload:
                 writer = csv.writer(file)
                 writer.writerow(log_row)
 
-            progress_bar.update(1)
+            # progress_bar.update(1)
             time.sleep(30)

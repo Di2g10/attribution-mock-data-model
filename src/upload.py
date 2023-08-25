@@ -1,4 +1,6 @@
 import pandas as pd
+from tqdm import tqdm
+
 import create_and_update_leads as lead_upload_py
 import access_token as tok
 import static_lists as static_list_py
@@ -47,10 +49,14 @@ def add_leads_to_static_list_from_dataframe(marketo_credentials: Credentials,
     # Convert into a lists of lead_ids within a dictionary. Each item is  a list.
     static_list_dict = dataframe_for_upload.groupby(list_id_column_name)[lead_id_column_name].apply(list).to_dict()
 
+    total_iterations = len(static_list_dict)
+    progress_bar = tqdm(total=total_iterations)
+
     for key, value in static_list_dict.items():
         add_leads_to_static_list(marketo_credentials=marketo_credentials,
                                  static_list_id=key,
                                  lead_ids_to_add=value)
+        progress_bar.update(1)
 
 
 def add_leads_to_program(marketo_credentials: Credentials, program_id: str, lead_ids_to_add: list, member_status: str):
@@ -75,7 +81,8 @@ def add_leads_to_program_from_dataframe(marketo_credentials: Credentials,
     grouped = dataframe_for_upload.groupby([program_id_column_name, member_status_column_name])[lead_id_column_name].\
         apply(list).reset_index()
 
-    print(grouped.to_markdown())
+    total_iterations = grouped.ngroups
+    progress_bar = tqdm(total=total_iterations)
 
     # Apply function to each group
     for _, group in grouped.iterrows():
@@ -83,4 +90,6 @@ def add_leads_to_program_from_dataframe(marketo_credentials: Credentials,
                              program_id=group[program_id_column_name],
                              member_status=group[member_status_column_name],
                              lead_ids_to_add=group[lead_id_column_name])
+
+        progress_bar.update(1)
 

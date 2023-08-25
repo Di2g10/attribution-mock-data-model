@@ -55,8 +55,8 @@ if len(new_leads_for_upload) != new_leads_for_upload['email'].nunique():
     print("EMAILS NOT UNIQUE")
 
 # Select columns for upload
-columns_to_drop = [ 'List_Name_Part_One', 'Program Name', 'List Name',
-    'Program ID', 'List ID', 'Campaign', 'pmi_MCL_Date__c_date' ]
+columns_to_drop = ['List_Name_Part_One', 'Program Name', 'List Name',
+                   'Program ID', 'List ID', 'Campaign', 'pmi_MCL_Date__c_date']
 
 new_leads_for_upload = new_leads_for_upload.drop(columns=columns_to_drop)
 
@@ -73,7 +73,6 @@ lead_upload(marketo_credentials=marketo_credentials,
             )
 
 
-
 # Pull the people from Marketo - Round 2
 fields = ['id', 'email', 'Unsubscribed']
 marketo_credentials = create_credentials(client_id=config.client_id,
@@ -85,7 +84,6 @@ bulk_lead_extract_to_file(fields=fields,
                           output_directory=fpath.workspace_directory_process,
                           output_filename='lead_extract2',
                           marketo_credentials=marketo_credentials)
-
 
 
 # Obtain people ids for email addresses
