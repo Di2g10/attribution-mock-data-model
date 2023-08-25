@@ -8,6 +8,13 @@ from tqdm import tqdm
 
 run_type = input("Run sample or full data? (s/f)")
 
+
+# Read list of unsubs to exclude from uploads
+unsubs_df = pd.read_csv(r"C:\Users\JakeCampling\CleverTouch\AVEVA - Documents\93806_AVEVA_Managed Service 2023\Su"
+                      r"pport Requests\08 August\Product Data Ingestion\02_Input\Unsubs.csv")
+
+unsub_list = unsubs_df['email'].tolist()
+
 # Upload existing data
 print("Uploading existing leads")
 output_file_name = 'Existing_upload.csv'
@@ -18,6 +25,7 @@ if run_type == 'f':
 else:
     existing_leads_for_upload = existing_leads.head(3)
 
+existing_leads_for_upload = existing_leads_for_upload[~existing_leads_for_upload['email'].isin(unsub_list)]
 
 # Check email is unique
 if len(existing_leads_for_upload) != existing_leads_for_upload['id'].nunique():
@@ -51,6 +59,9 @@ if run_type == 'f':
 else:
     new_leads_for_upload = new_leads.head(3)
 
+new_leads_for_upload = new_leads_for_upload[~new_leads_for_upload['email'].isin(unsub_list)]
+
+
 if len(new_leads_for_upload) != new_leads_for_upload['email'].nunique():
     print("EMAILS NOT UNIQUE")
 
@@ -73,66 +84,66 @@ lead_upload(marketo_credentials=marketo_credentials,
             )
 
 
-# Pull the people from Marketo - Round 2
-fields = ['id', 'email', 'Unsubscribed']
-marketo_credentials = create_credentials(client_id=config.client_id,
-                                         client_secret=config.client_secret,
-                                         url=config.url)
-bulk_lead_extract_to_file(fields=fields,
-                          filter_type='smartListId',
-                          filter_value='751814',
-                          output_directory=fpath.workspace_directory_process,
-                          output_filename='lead_extract2',
-                          marketo_credentials=marketo_credentials)
-
-
-# Obtain people ids for email addresses
-# Get list and programs Ids from combined data
-output_file_name = 'combined_output.xlsx'
-combined_df = pd.read_excel(fpath.workspace_directory_output / output_file_name)
-combined_df = combined_df[['email', 'Program ID', 'List ID']]
-print(combined_df.head(3).to_markdown())
-
-
-current_leads_df = pd.read_csv(fpath.workspace_directory_process / 'lead_extract2.csv')
-
-current_leads_df_filtered = current_leads_df[current_leads_df['Unsubscribed'] != True]
-email_and_ids_df = current_leads_df[['id', 'email']]
-
-leads_for_programs = combined_df.merge(email_and_ids_df, on='email', how='inner')
-
-columns_to_convert = ['Program ID', 'List ID', 'id']
-leads_for_programs[columns_to_convert] = leads_for_programs[columns_to_convert].astype(str)
-
-# Replace ".0" with "" in specific columns
-leads_for_programs[columns_to_convert] = leads_for_programs[columns_to_convert].replace(r'\.0', '', regex=True)
-
-
-print(leads_for_programs.head(3).to_markdown())
-
-# upload to lists
-print("--------------------------------------------------------------------------------------------------")
-print("Running program loads")
-marketo_credentials = create_credentials(client_id=config.client_id,
-                                         client_secret=config.client_secret,
-                                         url=config.url)
-add_leads_to_static_list_from_dataframe(marketo_credentials=marketo_credentials,
-                                        dataframe_for_upload=leads_for_programs,
-                                        lead_id_column_name='id',
-                                        list_id_column_name='List ID')
-
-
-# ToDo: Add column for program member status
-leads_for_programs['memer_status'] = 'Registered'
-
-# upload to programs
-print("--------------------------------------------------------------------------------------------------")
-print("Running program loads")
-marketo_credentials = create_credentials(client_id=config.client_id,
-                                         client_secret=config.client_secret,
-                                         url=config.url)
-add_leads_to_program_from_dataframe(marketo_credentials=marketo_credentials,
-                                    dataframe_for_upload=leads_for_programs,
-                                    lead_id_column_name='id',
-                                    program_id_column_name='Program ID',
-                                    member_status_column_name='memer_status')
+# # Pull the people from Marketo - Round 2
+# fields = ['id', 'email', 'Unsubscribed']
+# marketo_credentials = create_credentials(client_id=config.client_id,
+#                                          client_secret=config.client_secret,
+#                                          url=config.url)
+# bulk_lead_extract_to_file(fields=fields,
+#                           filter_type='smartListId',
+#                           filter_value='751814',
+#                           output_directory=fpath.workspace_directory_process,
+#                           output_filename='lead_extract2',
+#                           marketo_credentials=marketo_credentials)
+#
+#
+# # Obtain people ids for email addresses
+# # Get list and programs Ids from combined data
+# output_file_name = 'combined_output.xlsx'
+# combined_df = pd.read_excel(fpath.workspace_directory_output / output_file_name)
+# combined_df = combined_df[['email', 'Program ID', 'List ID']]
+# print(combined_df.head(3).to_markdown())
+#
+#
+# current_leads_df = pd.read_csv(fpath.workspace_directory_process / 'lead_extract2.csv')
+#
+# current_leads_df_filtered = current_leads_df[current_leads_df['Unsubscribed'] != True]
+# email_and_ids_df = current_leads_df[['id', 'email']]
+#
+# leads_for_programs = combined_df.merge(email_and_ids_df, on='email', how='inner')
+#
+# columns_to_convert = ['Program ID', 'List ID', 'id']
+# leads_for_programs[columns_to_convert] = leads_for_programs[columns_to_convert].astype(str)
+#
+# # Replace ".0" with "" in specific columns
+# leads_for_programs[columns_to_convert] = leads_for_programs[columns_to_convert].replace(r'\.0', '', regex=True)
+#
+#
+# print(leads_for_programs.head(3).to_markdown())
+#
+# # upload to lists
+# print("--------------------------------------------------------------------------------------------------")
+# print("Running program loads")
+# marketo_credentials = create_credentials(client_id=config.client_id,
+#                                          client_secret=config.client_secret,
+#                                          url=config.url)
+# add_leads_to_static_list_from_dataframe(marketo_credentials=marketo_credentials,
+#                                         dataframe_for_upload=leads_for_programs,
+#                                         lead_id_column_name='id',
+#                                         list_id_column_name='List ID')
+#
+#
+# # Add column for program member status
+# leads_for_programs['memer_status'] = 'Registered'
+#
+# # upload to programs
+# print("--------------------------------------------------------------------------------------------------")
+# print("Running program loads")
+# marketo_credentials = create_credentials(client_id=config.client_id,
+#                                          client_secret=config.client_secret,
+#                                          url=config.url)
+# add_leads_to_program_from_dataframe(marketo_credentials=marketo_credentials,
+#                                     dataframe_for_upload=leads_for_programs,
+#                                     lead_id_column_name='id',
+#                                     program_id_column_name='Program ID',
+#                                     member_status_column_name='memer_status')
