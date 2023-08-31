@@ -28,71 +28,71 @@ else:
 # Check email is unique
 if len(existing_leads_for_upload) != existing_leads_for_upload['id'].nunique():
     print("EMAILS NOT UNIQUE")
-#
-# print("--------------------------------------------------------------------------------------------------")
-# print("Running existing leads loads")
-#
-# # Run the upload
-# marketo_credentials = create_credentials(client_id=config.client_id,
-#                                          client_secret=config.client_secret,
-#                                          url=config.url)
-#
-# lead_upload(marketo_credentials=marketo_credentials,
-#             data_to_upload=existing_leads_for_upload,
-#             create_or_update='updateOnly',
-#             lead_lookup='id',
-#             batch_size=100
-#             )
-#
 
-# # Upload new records
-# print("--------------------------------------------------------------------------------------------------")
-# print("Running new leads loads")
-#
-# output_file_name = 'New_upload.csv'
-# new_leads = pd.read_csv(fpath.workspace_directory_output / output_file_name, encoding='utf-8')
-#
-# if run_type == 'f':
-#     new_leads_for_upload = new_leads
-# else:
-#     new_leads_for_upload = new_leads.head(3)
-#
-# new_leads_for_upload = new_leads_for_upload[~new_leads_for_upload['email'].isin(unsub_list)]
-#
-#
-# if len(new_leads_for_upload) != new_leads_for_upload['email'].nunique():
-#     print("EMAILS NOT UNIQUE")
-#
-# # Select columns for upload
-# columns_to_drop = ['List_Name_Part_One', 'Program Name', 'List Name',
-#                    'Program ID', 'List ID', 'Campaign', 'pmi_MCL_Date__c_date']
-#
-# new_leads_for_upload = new_leads_for_upload.drop(columns=columns_to_drop)
-#
-# # Run the upload
-# marketo_credentials = create_credentials(client_id=config.client_id,
-#                                          client_secret=config.client_secret,
-#                                          url=config.url)
-#
-# lead_upload(marketo_credentials=marketo_credentials,
-#             data_to_upload=new_leads_for_upload,
-#             create_or_update='createOnly',
-#             lead_lookup='email',
-#             batch_size=75
-#             )
+print("--------------------------------------------------------------------------------------------------")
+print("Running existing leads loads")
+
+# Run the upload
+marketo_credentials = create_credentials(client_id=config.client_id,
+                                         client_secret=config.client_secret,
+                                         url=config.url)
+
+lead_upload(marketo_credentials=marketo_credentials,
+            data_to_upload=existing_leads_for_upload,
+            create_or_update='updateOnly',
+            lead_lookup='id',
+            batch_size=100
+            )
 
 
-# # Pull the people from Marketo - Round 2
-# fields = ['id', 'email', 'Unsubscribed']
-# marketo_credentials = create_credentials(client_id=config.client_id,
-#                                          client_secret=config.client_secret,
-#                                          url=config.url)
-# bulk_lead_extract_to_file(fields=fields,
-#                           filter_type='smartListId',
-#                           filter_value='751814',
-#                           output_directory=fpath.workspace_directory_process,
-#                           output_filename='lead_extract2',
-#                           marketo_credentials=marketo_credentials)
+# Upload new records
+print("--------------------------------------------------------------------------------------------------")
+print("Running new leads loads")
+
+output_file_name = 'New_upload.csv'
+new_leads = pd.read_csv(fpath.workspace_directory_output / output_file_name, encoding='utf-8')
+
+if run_type == 'f':
+    new_leads_for_upload = new_leads
+else:
+    new_leads_for_upload = new_leads.head(3)
+
+new_leads_for_upload = new_leads_for_upload[~new_leads_for_upload['email'].isin(unsub_list)]
+
+
+if len(new_leads_for_upload) != new_leads_for_upload['email'].nunique():
+    print("EMAILS NOT UNIQUE")
+
+# Select columns for upload
+columns_to_drop = ['List_Name_Part_One', 'Program Name', 'List Name',
+                   'Program ID', 'List ID', 'Campaign', 'pmi_MCL_Date__c_date']
+
+new_leads_for_upload = new_leads_for_upload.drop(columns=columns_to_drop)
+
+# Run the upload
+marketo_credentials = create_credentials(client_id=config.client_id,
+                                         client_secret=config.client_secret,
+                                         url=config.url)
+
+lead_upload(marketo_credentials=marketo_credentials,
+            data_to_upload=new_leads_for_upload,
+            create_or_update='createOnly',
+            lead_lookup='email',
+            batch_size=75
+            )
+
+
+# Pull the people from Marketo - Round 2
+fields = ['id', 'email', 'Unsubscribed']
+marketo_credentials = create_credentials(client_id=config.client_id,
+                                         client_secret=config.client_secret,
+                                         url=config.url)
+bulk_lead_extract_to_file(fields=fields,
+                          filter_type='smartListId',
+                          filter_value='751814',
+                          output_directory=fpath.workspace_directory_process,
+                          output_filename='lead_extract2',
+                          marketo_credentials=marketo_credentials)
 
 
 # Obtain people ids for email addresses
