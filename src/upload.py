@@ -81,7 +81,8 @@ def add_leads_to_program_from_dataframe(marketo_credentials: Credentials,
     grouped = dataframe_for_upload.groupby([program_id_column_name, member_status_column_name])[lead_id_column_name].\
         apply(list).reset_index()
 
-    total_iterations = grouped.ngroups
+    #total_iterations = grouped.ngroups
+    total_iterations = len(grouped)
     progress_bar = tqdm(total=total_iterations)
 
     # Apply function to each group
