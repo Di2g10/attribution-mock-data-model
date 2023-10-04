@@ -236,6 +236,39 @@ def existing_records(df: pd.DataFrame,
     df = df.drop(columns='email')
     df['nonmarketable'] = 'False'
     output_file_name = 'Existing_upload.csv'
+    # df.to_csv(fpath.workspace_directory_output / output_file_name, index=False)
+    return df
+
+
+def post_existing_records(df: pd.DataFrame,
+                          marketo_people_filename: str):
+    """
+    Creates a file to upload to Marketo that will update fields specified, for the exisiting records only.
+    df: dataframe with leads in with the fields names to match Marketo API
+    marketo_people_filename: filename of all marketo people to check against in csv format. Will be pulled
+    from fpath.workspace_directory_process.
+    """
+
+    # Convert the 'pmi_MCL_Date__c_date' column to datetime type
+    df['pmi_MCL_Date__c_date'] = pd.to_datetime(df['pmi_MCL_Date__c'])
+
+    # Sort the DataFrame by email and date in descending order
+    df_sorted = df.sort_values(by=['email', 'pmi_MCL_Date__c_date'], ascending=[True, False])
+
+    # Use groupby to get the most recent date for each email
+    df_latest_all_fields = df_sorted.groupby('email').first().reset_index()
+
+    df = df_latest_all_fields.drop_duplicates(subset=['email'])
+    marketo_df = pd.read_csv(fpath.workspace_directory_process / marketo_people_filename)
+    df = df[df['email'].isin(marketo_df['email'])]
+    print("existing_records_df", df)
+    df['Detailed_Lead_Source__c'] = df['Program Name'] + '.' + df['List Name']
+    df['pmi_MCL_Campaign__c'] = df['Program Name'] + '.' + df['List Name']
+    df = df[['pmi_Preferred_Language__c', 'email', 'pmi_MCL_Campaign__c', 'Detailed_Lead_Source__c']]
+    df = pd.merge(df, marketo_df, how='left', on='email')
+    df = df.drop(columns='email')
+    df['nonmarketable'] = 'False'
+    output_file_name = 'Post_existing_upload.csv'
     df.to_csv(fpath.workspace_directory_output / output_file_name, index=False)
     return df
 
