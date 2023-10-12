@@ -1,23 +1,8 @@
 from pathlib import Path
 import os
 import pandas as pd
-
-
-input_filepath = Path(
-    "C:/Users",
-    os.getlogin(),
-    "Documents",
-    "aveva-marketo-dedupe",
-    "data",
-    "input")
-
-mid_filepath = Path(
-    "C:/Users",
-    os.getlogin(),
-    "Documents",
-    "aveva-marketo-dedupe",
-    "data",
-    "midstep")
+import filepaths
+from src.post_upload.file_location import input_filepath, mid_filepath, output_filepath
 
 output_filepath = Path(
     "C:/Users",
