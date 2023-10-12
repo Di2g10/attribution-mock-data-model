@@ -4,29 +4,25 @@ import pandas as pd
 import filepaths
 from src.post_upload.file_location import input_filepath, mid_filepath, output_filepath
 
-output_filepath = Path(
-    "C:/Users",
-    os.getlogin(),
-    "Documents",
-    "aveva-marketo-dedupe",
-    "data",
-    "output")
-
-
-def split_df():
-    df = pd.read_csv(input_filepath / "activity_data_value_change_filtered_reformatted.csv")
-    # break df based on the primaryAttributeValue column
-    df_last_campaign = df[df['primaryAttributeValue'].isin(['Last Campaign'])]
-    print('df_last_campaign shape: ', df_last_campaign.shape)
-    df_aql_campaign = df[df['primaryAttributeValue'].isin(['AQL Campaign'])]
-    print('df_aql_campaign shape: ', df_aql_campaign.shape)
-    df_mel_campaign = df[df['primaryAttributeValue'].isin(['MEL Campaign'])]
-    print('df_mel_campaign shape: ', df_mel_campaign.shape)
-    df_aql_latest_campaign = df[df['primaryAttributeValue'].isin(['AQL Latest Campaign'])]
-    print('df_aql_latest_campaign shape: ', df_aql_latest_campaign.shape)
-    df_preferred_language = df[df['primaryAttributeValue'].isin(['Preferred Language'])]
-    print('df_preferred_language shape: ', df_preferred_language.shape)
-    return df_last_campaign, df_aql_campaign, df_mel_campaign, df_aql_latest_campaign, df_preferred_language
+def split_df(request: str):
+    if request=='activity_data_value_change':
+        df = pd.read_csv(input_filepath / "activity_data_value_change_filtered_reformatted.csv")
+        # break df based on the primaryAttributeValue column
+        df_last_campaign = df[df['primaryAttributeValue'].isin(['Last Campaign'])]
+        print('df_last_campaign shape: ', df_last_campaign.shape)
+        df_aql_campaign = df[df['primaryAttributeValue'].isin(['AQL Campaign'])]
+        print('df_aql_campaign shape: ', df_aql_campaign.shape)
+        df_mel_campaign = df[df['primaryAttributeValue'].isin(['MEL Campaign'])]
+        print('df_mel_campaign shape: ', df_mel_campaign.shape)
+        df_aql_latest_campaign = df[df['primaryAttributeValue'].isin(['AQL Latest Campaign'])]
+        print('df_aql_latest_campaign shape: ', df_aql_latest_campaign.shape)
+        df_preferred_language = df[df['primaryAttributeValue'].isin(['Preferred Language'])]
+        print('df_preferred_language shape: ', df_preferred_language.shape)
+        return df_last_campaign, df_aql_campaign, df_mel_campaign, df_aql_latest_campaign, df_preferred_language
+    elif request=='mcl_campaign_data_value_change':
+        df_mcl_campaign = pd.read_csv(input_filepath / "activity_data_value_change_filtered_mcl.csv")
+        print('df_mcl_campaign shape: ', df_mcl_campaign.shape)
+        return df_mcl_campaign
 
 
 def keep_training_status(df):
