@@ -1,14 +1,14 @@
 import pandas as pd
-
 import config
 from create_credentials import create_credentials
-
-pd.set_option('display.max_columns', None)
 import filepaths as fpath
 from datetime import date
 from extraction import bulk_lead_extract_to_file
 import src
-from upload_data_transformation import import_data, rename_fields, field_value_mapping, list_name, obtain_list_prog_ids, fix_dates, existing_records, new_records
+from upload_data_transformation import import_data, rename_fields, field_value_mapping, list_name, obtain_list_prog_ids, \
+    fix_dates, existing_records, new_records, post_existing_records
+pd.set_option('display.max_columns', None)
+
 
 # Snapshot saved to C:\Users\AnneYoung\AppData\Local\JetBrains\PyCharm2023.1\snapshots\aveva-marketo-dedupe.pstat
 def main():
@@ -65,9 +65,10 @@ def main():
     #                           output_filename='lead_extract1',
     #                           marketo_credentials=marketo_credentials)
 
-    existing_records_df = existing_records(#df=fix_dates_df,
-                                           df=combined_df,
-                                           marketo_people_filename='lead_extract1.csv')
+    existing_records_df = existing_records(# df=fix_dates_df,
+        df=combined_df,
+        marketo_people_filename='lead_extract1.csv')
+
     print(str(len(existing_records_df)) + ' rows in existing_records_df')
     print(existing_records_df.head(10).to_markdown())
 
