@@ -85,6 +85,7 @@ def field_value_mapping(df: pd.DataFrame,
         print(f"Values in '{column}' column for {campaign} have been mapped and written to '{output_file_name}'.")
     return df
 
+
 def custom_parse(date_str):
     """
     Feeds into the fix_dates function below
@@ -197,11 +198,14 @@ def obtain_list_prog_ids(df: pd.DataFrame,
     list_value_df = pd.read_excel(fpath.workspace_directory_mapping / lookup_file_name,
                                   sheet_name=lvc_sheet_name,
                                   usecols=['Program Name', 'List Name', 'Program ID', 'List ID'])
+
     # select part one of list from lookup df
     list_value_df['List_Name_Part_One'] = list_value_df['List Name'].str.split(' -').str[0]
     # ensure same part is brought back for campaign data
     df['List_Name_Part_One'] = df['List_Name_Part_One'].str.split(' -').str[0]
-    df = pd.merge(df, list_value_df, how='left', on='List_Name_Part_One')
+    df = pd.merge(df,
+                  list_value_df,
+                  how='left', on='List_Name_Part_One')
     df['Program ID'] = df['Program ID'].astype(str)
     df['Program ID'] = df['Program ID'].str.replace('.0', '')
     df['List ID'] = df['List ID'].astype(str)
@@ -266,9 +270,9 @@ def post_existing_records(df: pd.DataFrame,
     df['pmi_MCL_Campaign__c'] = df['Program Name'] + '.' + df['List Name']
     df = df[['pmi_Preferred_Language__c', 'email', 'pmi_MCL_Campaign__c', 'Detailed_Lead_Source__c']]
     df = pd.merge(df, marketo_df, how='left', on='email')
-    df = df.drop(columns='email')
+    # df = df.drop(columns='email')
     df['nonmarketable'] = 'False'
-    output_file_name = 'Post_existing_upload.csv'
+    output_file_name = 'Post_existing_upload_with_email.csv'
     df.to_csv(fpath.workspace_directory_output / output_file_name, index=False)
     return df
 
