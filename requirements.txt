@@ -2,4 +2,3 @@ pandas
 black
 ruff
 pre-commit
-tqdm
