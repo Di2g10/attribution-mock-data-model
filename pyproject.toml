@@ -1,7 +1,7 @@
 [tool.black]
 line-length = 100
 [tool.ruff]
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default and more checks that we have selected
 select = ["E", "F", "N","D","PD","RUF","PL","NPY","PTH","RET","SIM"]
 ignore = ["D213","D203","E501","PD901", "PLC1901"]
 
