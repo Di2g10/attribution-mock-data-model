@@ -1,5 +1,22 @@
 # Basic Project Template
 
+## 0. Create Fork
+- Fork this project into either a client specific folder if its for client work or into the shared tools folder if it would be used across multiple clients.
+- Discuss with the team your idea for a shared tool to ensure something doesn't already exist.
+- Update forked project to default merge into itself rather than back to the template
+  - Select Settings > Merge requests.
+  - In the Target project section, select the option you want to use for your default target project.
+  - Select Save changes.
+- Create branch protections
+  - Settings > Repository > Protected Branches
+
+| Branch | Allowed to Merge        | Allowed to Push |
+|--------|-------------------------|-----------------|
+| Main   | Maintainers             | No one          |
+| Dev    | Developers and maintainers | No one      |
+
+  - Default branch should be Dev
+- Delete this section of the template.
 
 ## 1. Getting started
 
