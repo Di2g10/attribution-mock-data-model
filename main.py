@@ -1,7 +1,7 @@
 """Contains the main code runner for the project."""
 
 
-def main():
+def main() -> None:
     """Run end to end code."""
     raise NotImplementedError
 

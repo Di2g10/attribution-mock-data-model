@@ -6,7 +6,7 @@ import unittest
 class TestEndToEnd(unittest.TestCase):
     """Test the end to end code."""
 
-    def test_standard_run(self):
+    def test_standard_run(self) -> None:
         """Test the standard run of the code."""
         self.assertEqual(True, False)  # add assertion here
 
