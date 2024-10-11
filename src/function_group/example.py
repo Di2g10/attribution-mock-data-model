@@ -7,13 +7,12 @@ def example(x: int) -> int:
     :param x: input expected to be any integer
     :return: x expected to be an integer.
     """
-    x = x + 1
-    return x
+    return x + 1
 
 
-def _main():
+def _main() -> None:
     # example demonstrating function
-    x = "Some input"
+    x = 1
     print(f"input: {x} => {example(x)}")
 
 
