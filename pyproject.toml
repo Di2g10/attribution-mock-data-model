@@ -44,7 +44,7 @@ mypy = "^1.13.0"
 [[tool.poetry.source]]
 # data-and-insights group repository
 name = "gitlab"
-url = "https://git.clever-touch.com/api/v4/groups/1139/-/packages/pypi/simple"
+url = "https://git.clever-touch.com/api/v4/groups/1142/-/packages/pypi/simple"
 priority = "supplemental"
 
 [tool.black]
