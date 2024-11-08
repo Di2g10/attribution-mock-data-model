@@ -8,7 +8,7 @@ class TestEndToEnd(unittest.TestCase):
 
     def test_standard_run(self) -> None:
         """Test the standard run of the code."""
-        self.assertEqual(True, True)  # add assertion here
+        self.assertEqual(True, False)  # add assertion here
 
 
 if __name__ == "__main__":
