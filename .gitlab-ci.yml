@@ -1,0 +1,168 @@
+# based off: https://docs.mpcdf.mpg.de/doc/data/gitlab/devop-tutorial.html
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Cache settings to maintain any files downloaded by pip - saves it downloading requirements multiple times
+cache:
+  paths:
+    - .cache/pip
+
+# Define shared settings for all Python jobs
+stages:
+  - code_quality
+  - test
+  - build_and_deploy
+
+before_script:
+  - apt-get update && apt-get install -y git
+
+.python_template:
+  before_script:
+    - apt-get update
+    - python --version ; pip --version  # For debugging
+    - pip install poetry
+    - poetry config http-basic.gitlab "__token__" "$PYPI_TOKEN"
+    - poetry install
+    - source `poetry env info --path`/bin/activate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'  # Run when a merge request is created
+    - if: '$CI_PIPELINE_SOURCE == "push"'  # Run when a commit is pushed
+
+# Ruff/Black Linting Job
+ruff_lint:
+  stage: code_quality
+  extends: .python_template
+  image: "python:3.11"
+  script:
+    - poetry install --with checks
+    - black .
+    - ruff check
+  allow_failure: true  # Keeps the pipeline running even if this fails
+
+# MyPy Type Checking Job
+mypy_typecheck:
+  stage: code_quality
+  extends: .python_template
+  image: "python:3.11"
+  script:
+    - poetry install --with checks
+    - mypy --install-types --non-interactive .
+  allow_failure: true
+
+# Testing and Coverage Job with Coverage.py for Multiple Python Versions
+run_tests:
+  stage: test
+  extends: .python_template
+  script:
+    - poetry install --with test
+    - python gitlab_prep/set_keyring_from_env.py
+    - coverage run -m unittest discover
+    - coverage report  # Display coverage report in the job log
+    - coverage xml     # Generate an XML report
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.10", "3.11", "3.12"]
+  image: "python:${PYTHON_VERSION}"
+  coverage: '/TOTAL.*\s+(\d+\%)$/'  # Regular expression to capture coverage percentage
+  artifacts:
+    paths:
+      - coverage.xml
+
+#
+## Build and Deploy Job
+#build_and_deploy:
+#  stage: build_and_deploy
+#  image: 'python:3.11'
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "main"'
+#  script:
+#    - |
+#      apt-get update && apt-get install -y curl jq git
+#
+#      echo "Fetching merge requests associated with commit $CI_COMMIT_SHA"
+#      API_URL="$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests"
+#      echo "API URL: $API_URL"
+#
+#      # Use verbose output to see the HTTP request details
+#      MR_RESPONSE=$(curl --silent --header "PRIVATE-TOKEN: $PYPI_TOKEN" "$API_URL")
+#      echo "MR_RESPONSE: $MR_RESPONSE"
+#
+#      # Check if MR_RESPONSE contains a valid JSON array
+#      if echo "$MR_RESPONSE" | jq empty; then
+#        LABELS=$(echo "$MR_RESPONSE" | jq -r '.[0].labels | join(",")')
+#        echo "Labels: $LABELS"
+#        if echo "$LABELS" | grep -q "bump-major"; then
+#          VERSION_BUMP="major"
+#        elif echo "$LABELS" | grep -q "bump-minor"; then
+#          VERSION_BUMP="minor"
+#        else
+#          VERSION_BUMP="patch"
+#        fi
+#
+#      else
+#        echo "Error: Invalid MR_RESPONSE. Defaulting VERSION_BUMP to 'patch'."
+#        VERSION_BUMP="patch"
+#      fi
+#
+#      echo "Version bump: $VERSION_BUMP"
+#      # Get the current version from the latest tag or default to 0.0.0
+#
+#      CURRENT_VERSION=$(git describe --tags --abbrev=0 || echo "0.0.0")
+#      echo "Current version: $CURRENT_VERSION"
+#
+#      # Calculate the new version
+#      pip install semver poetry keyrings.alt
+#      NEW_VERSION=$(python -c "import semver; print(semver.bump_${VERSION_BUMP}('$CURRENT_VERSION'))")
+#      echo "New version: $NEW_VERSION"
+#
+#      # Update the version in pyproject.toml using Poetry
+#      poetry version $NEW_VERSION
+#
+#      # Build the package
+#      poetry build
+#
+#      # List files in dist/ to check if artifacts are present
+#      echo "Listing contents of dist/ directory:"
+#      ls -la dist/
+#
+#      # Publish to GitLab Package Registry
+#      # Construct the PYPI repository URL
+#      PYPI_REPOSITORY_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
+#      echo "Using PYPI_REPOSITORY_URL: $PYPI_REPOSITORY_URL"
+#
+#      # Configure Poetry to use the GitLab Package Registry
+#      poetry config repositories.gitlab "$PYPI_REPOSITORY_URL"
+#
+#      # Authenticate using CI_JOB_TOKEN
+#      poetry config http-basic.gitlab "__token__" "$PYPI_TOKEN"
+#
+#      # Publish the package
+#      poetry publish -r gitlab -vvv
+#
+#      echo "Upload Successful"
+#
+#      # Configure Git
+#      git config user.name "CI/CD"
+#      git config user.email "cicd@clever-touch.com"
+#
+#      # Fetch all branches and tags from the remote repository
+#      git fetch --prune --tags origin
+#
+#      # Check out the main branch
+#      git checkout main
+#
+#      # Reset the local main branch to match the remote main branch
+#      git reset --hard origin/main
+#
+#      # Check if the tag exists locally and delete it
+#      if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+#        echo "Tag '$NEW_VERSION' already exists locally. Deleting it."
+#        git tag -d "$NEW_VERSION"
+#      fi
+#
+#      # Create and push the new tag
+#      git tag "$NEW_VERSION"
+#
+#      # Update the remote URL with authentication
+#      git remote set-url origin "https://gitlab-ci-token:${GITLAB_TOKEN_PROJECT}@git.clever-touch.com/${CI_PROJECT_PATH}.git"
+#      git push origin "$NEW_VERSION"
