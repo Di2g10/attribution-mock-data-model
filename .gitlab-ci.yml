@@ -164,5 +164,5 @@ run_tests:
 #      git tag "$NEW_VERSION"
 #
 #      # Update the remote URL with authentication
-#      git remote set-url origin "https://gitlab-ci-token:${GITLAB_TOKEN_PROJECT}@git.clever-touch.com/${CI_PROJECT_PATH}.git"
+#      git remote set-url origin "https://gitlab-ci-token:${PYPI_TOKEN}@git.clever-touch.com/${CI_PROJECT_PATH}.git"
 #      git push origin "$NEW_VERSION"
