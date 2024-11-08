@@ -1,3 +1,52 @@
+[tool.poetry]
+# update this to the name of the project!
+name = "basic_template"
+version = "0.1.0"
+readme = "README.md"
+
+# set this to true if this is a package which will be built and imported by other projects
+# for this to work, the name of the project needs to match the directory which contains the package.
+package-mode = false
+
+[tool.poetry.dependencies]
+# DO NOT CHANGE THIS MANUALLY
+# Use poetry add {package}
+# for gitlab packages in the package repository add `--source gitlab`
+# any python version after 3.10
+python = "^3.10"
+pandas = "^2.2.3"
+keyring = "^25.5.0"
+
+[tool.poetry.group.test]
+# define the test group and set as optional
+optional = true
+
+[tool.poetry.group.test.dependencies]
+# any test dependencies
+# DO NOT CHANGE THIS MANUALLY
+# Use poetry add {package} --group test
+keyrings-alt = "^5.0.2"  # this is for any keyring tests which need to run on GitLab
+coverage = "^7.6.4"
+
+[tool.poetry.group.checks]
+# define the checks group and set as optional
+optional = true
+
+[tool.poetry.group.checks.dependencies]
+# dependencies for the checks which happen in gitlab
+# DO NOT CHANGE THIS MANUALLY
+# Use poetry add {package} --group checks
+ruff = "^0.7.2"
+pre-commit = "^4.0.1"
+black = "^24.10.0"
+mypy = "^1.13.0"
+
+[[tool.poetry.source]]
+# data-and-insights group repository
+name = "gitlab"
+url = "https://git.clever-touch.com/api/v4/groups/1139/-/packages/pypi/simple"
+priority = "supplemental"
+
 [tool.black]
 line-length = 100
 
