@@ -1,0 +1,10 @@
+-- create a view which references the country mapping csv file
+
+CREATE OR REPLACE VIEW CLIENT_DB.STATIC_FILES.COUNTRY_MAPPING AS
+SELECT
+    $1 AS COUNTRY_OUTPUT,
+    $2 AS COUNTRY_CODE_OUTPUT,
+    $3 AS COUNTRY_INPUT
+FROM
+    '@STATIC_FILES/Country_Mapping/Country Mapping_v4.csv'
+    (FILE_FORMAT => CLIENT_DB.STATIC_FILES.COUNTRY_MAPPING_CSV);

@@ -13,14 +13,15 @@ stages:
   - test
   - build_and_deploy
 
+
 before_script:
   - apt-get update && apt-get install -y git
 
 include:
-  - project: 'data-and-insights/project-templates/gitlab-cicd-templates'
+  - project: 'data-and-insights/tem/gitlab-cicd-templates'
     file: '/templates/.python_template.yml'
     ref: main
-  - project: 'data-and-insights/project-templates/gitlab-cicd-templates'
+  - project: 'data-and-insights/tem/gitlab-cicd-templates'
     file: '/templates/.build_and_deploy.yml'
     ref: main
 
@@ -33,7 +34,16 @@ ruff_lint:
     - poetry install --with checks
     - black .
     - ruff check
-  allow_failure: true  # Keeps the pipeline running even if this fails
+
+# SQL Fluff Linting Job
+sql_lint:
+  stage: code_quality
+  extends: .python_template
+  image: "python:3.11"
+  script:
+    - poetry install --with checks
+    - sqlfluff lint .
+
 
 # MyPy Type Checking Job
 mypy_typecheck:
@@ -57,12 +67,23 @@ run_tests:
     - coverage xml     # Generate an XML report
   parallel:
     matrix:
-      - PYTHON_VERSION: ["3.10", "3.11", "3.12"]
+      - PYTHON_VERSION: ["3.10", "3.11"]
   image: "python:${PYTHON_VERSION}"
   coverage: '/TOTAL.*\s+(\d+\%)$/'  # Regular expression to capture coverage percentage
   artifacts:
     paths:
       - coverage.xml
+
+test_snowflake:
+  stage: test
+  extends: .python_template
+  image: "python:3.11"
+  script:
+    - python gitlab_prep/snowflake_check_deploy.py
+  rules:
+    - changes:
+        - snowflake_views/**/*  # only run when there are changes in the snowflake_views folder
+
 
 # # Build and Deploy Job
 # build_and_deploy:
@@ -71,3 +92,18 @@ run_tests:
 #   extends: .build_and_deploy
 #   rules:
 #     - if: '$CI_COMMIT_BRANCH == "main"'
+
+
+# Snowflake Dev -> Prod Deployment
+snowflake_deploy:
+  stage: build_and_deploy
+  extends: .python_template
+  image: 'python:3.11'
+  script:
+    - poetry install --with build
+    - python gitlab_prep/set_keyring_from_env.py
+    - python gitlab_prep/snowflake_deploy.py
+  rules:
+   - if: '$CI_COMMIT_BRANCH == "main"'
+   - changes:
+       - snowflake_views/**/*  # only run when there are changes in the snowflake_views folder
