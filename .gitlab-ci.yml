@@ -18,12 +18,13 @@ before_script:
   - apt-get update && apt-get install -y git
 
 include:
-  - project: 'data-and-insights/tem/gitlab-cicd-templates'
+  - project: 'data-and-insights/project-templates/gitlab-cicd-templates'
     file: '/templates/.python_template.yml'
     ref: main
-  - project: 'data-and-insights/tem/gitlab-cicd-templates'
+  - project: 'data-and-insights/project-templates/gitlab-cicd-templates'
     file: '/templates/.build_and_deploy.yml'
     ref: main
+
 
 # Ruff/Black Linting Job
 ruff_lint:
