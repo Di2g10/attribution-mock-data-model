@@ -122,7 +122,6 @@ no_implicit_reexport = true
 ignore_missing_imports = true
 
 [tool.sqlfluff.core]
-templater = "jinja"
 dialect = "snowflake"
 
 max_line_length = 120
