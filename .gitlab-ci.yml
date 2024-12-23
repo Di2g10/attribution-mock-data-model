@@ -13,17 +13,20 @@ stages:
   - test
   - build_and_deploy
 
-
 before_script:
   - apt-get update && apt-get install -y git
 
-include:
-  - project: 'data-and-insights/project-templates/gitlab-cicd-templates'
-    file: '/templates/.python_template.yml'
-    ref: main
-  - project: 'data-and-insights/project-templates/gitlab-cicd-templates'
-    file: '/templates/.build_and_deploy.yml'
-    ref: main
+.python_template:
+  before_script:
+    - apt-get update
+    - python --version ; pip --version  # For debugging
+    - pip install poetry
+    - poetry config http-basic.gitlab "__token__" "$GITLAB_PROJECT_ACCESS"
+    - poetry install
+    - source `poetry env info --path`/bin/activate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'  # Run when a merge request is created
+    - if: '$CI_PIPELINE_SOURCE == "push"'  # Run when a commit is pushed
 
 
 # Ruff/Black Linting Job
@@ -85,16 +88,6 @@ test_snowflake:
     - changes:
         - snowflake_views/**/*  # only run when there are changes in the snowflake_views folder
 
-
-# # Build and Deploy Job
-# build_and_deploy:
-#   stage: build_and_deploy
-#   image: 'python:3.11'
-#   extends: .build_and_deploy
-#   rules:
-#     - if: '$CI_COMMIT_BRANCH == "main"'
-
-
 # Snowflake Dev -> Prod Deployment
 snowflake_deploy:
   stage: build_and_deploy
@@ -105,6 +98,7 @@ snowflake_deploy:
     - python gitlab_prep/set_keyring_from_env.py
     - python gitlab_prep/snowflake_deploy.py
   rules:
-   - if: '$CI_COMMIT_BRANCH == "main"'
-   - changes:
+   - if: '$CI_COMMIT_BRANCH == "main" && $CI_PROJECT_NAME != "new-project-template"'
+     changes:
        - snowflake_views/**/*  # only run when there are changes in the snowflake_views folder
+   - when: never

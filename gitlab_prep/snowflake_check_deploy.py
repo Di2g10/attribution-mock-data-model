@@ -3,6 +3,7 @@
 Run when merging from dev into main.
 """
 
+import json
 import re
 
 from pathlib import Path
@@ -91,6 +92,21 @@ def determine_deploy_order() -> List[Path]:
     return topological_sort(stage_path)
 
 
+def check_keeper_id() -> None:
+    """Check that the keeper ID has been update in Snowflake."""
+    with Path("./gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
+        raw_config = json.load(raw_json)
+
+    keeper_id: str = raw_config["keeper_id"]
+
+    if keeper_id == "EXAMPLE_KEEPER_ID":
+        raise ValueError(
+            "Keeper ID not set: Update the Keeper Value to the client's keeper ID and "
+            "set the values in the GitLab CI Variables."
+        )
+
+
 if __name__ == "__main__":
     # check that there are no loops and the deployment can happen successfully
+    check_keeper_id()
     print(f"Push Order: {determine_deploy_order()}")

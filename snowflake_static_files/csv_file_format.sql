@@ -1,4 +1,4 @@
-USE ROLE CLIENT_DB;
+USE ROLE CLIENT_ROLE;
 
 -- CSV format as saved by Excel
 

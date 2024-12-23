@@ -1,4 +1,4 @@
-USE ROLE CLIENT_DB;
+USE ROLE CLIENT_ROLE;
 
 -- create a view which references the country mapping csv file
 

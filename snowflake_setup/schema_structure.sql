@@ -1,4 +1,4 @@
-USE ROLE CLIENT_DB;
+USE ROLE CLIENT_ROLE;
 
 -- replace CLIENT_DB here with the client name
 USE DATABASE CLIENT_DB;

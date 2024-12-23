@@ -1,4 +1,4 @@
-USE ROLE CLIENT_DB;
+USE ROLE CLIENT_ROLE;
 
 CREATE OR REPLACE VIEW CLIENT_DB.INTERMEDIATE_DEV.PERSON_WITH_CONVERSION_DETAILS AS
 -- this is a replica of the report that Rob is currently using in Salesforce
