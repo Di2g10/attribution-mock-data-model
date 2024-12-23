@@ -33,7 +33,6 @@ ruff_lint:
     - poetry install --with checks
     - black .
     - ruff check
-  allow_failure: true  # Keeps the pipeline running even if this fails
 
 # MyPy Type Checking Job
 mypy_typecheck:
@@ -63,11 +62,3 @@ run_tests:
   artifacts:
     paths:
       - coverage.xml
-
-# # Build and Deploy Job
-# build_and_deploy:
-#   stage: build_and_deploy
-#   image: 'python:3.11'
-#   extends: .build_and_deploy
-#   rules:
-#     - if: '$CI_COMMIT_BRANCH == "main"'

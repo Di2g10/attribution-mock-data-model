@@ -16,6 +16,7 @@ package-mode = false
 python = "^3.10"
 pandas = "^2.2.3"
 keyring = "^25.5.0"
+clevertouch-internal-tools = {version = "0.0.1", source = "gitlab_v2"}
 
 [tool.poetry.group.test]
 # define the test group and set as optional
@@ -43,8 +44,8 @@ mypy = "^1.13.0"
 
 [[tool.poetry.source]]
 # data-and-insights group repository
-name = "gitlab"
-url = "https://git.clever-touch.com/api/v4/groups/1142/-/packages/pypi/simple"
+name = "gitlab_v2"
+url = "https://gitlab.clever-touch.com/api/v4/groups/17/-/packages/pypi/simple"
 priority = "supplemental"
 
 [tool.black]
