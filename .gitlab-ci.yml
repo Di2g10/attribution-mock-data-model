@@ -28,7 +28,6 @@ before_script:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'  # Run when a merge request is created
     - if: '$CI_PIPELINE_SOURCE == "push"'  # Run when a commit is pushed
 
-
 # Ruff/Black Linting Job
 ruff_lint:
   stage: code_quality

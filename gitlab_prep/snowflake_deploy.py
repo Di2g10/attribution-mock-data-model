@@ -8,7 +8,7 @@ import snowflake
 
 from set_keyring_from_env import set_keyring
 from snowflake_check_deploy import determine_deploy_order
-from credentials_manager import SnowflakeCredentials
+from clevertouch_internal_tools.utils.credentials_manager import SnowflakeCredentials
 
 
 def read_setup() -> Tuple[str, Dict[str, str]]:
