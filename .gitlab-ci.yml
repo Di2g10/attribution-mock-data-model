@@ -21,7 +21,7 @@ before_script:
     - apt-get update
     - python --version ; pip --version  # For debugging
     - pip install poetry
-    - poetry config http-basic.gitlab "__token__" "$GITLAB_PROJECT_ACCESS"
+    - poetry config http-basic.gitlab_v2 "__token__" "$GITLAB_PROJECT_ACCESS"
     - poetry install
     - source `poetry env info --path`/bin/activate
   rules:
