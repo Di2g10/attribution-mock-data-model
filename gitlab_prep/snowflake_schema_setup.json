@@ -1,0 +1,17 @@
+{
+  "keeper_id": "EXAMPLE_KEEPER_ID",
+  "stages": {
+    "base": {
+      "dev_schema": "BASE_DEV",
+      "prod_schema": "BASE_PROD"
+    },
+    "intermediate": {
+      "dev_schema": "INTERMEDIATE_DEV",
+      "prod_schema": "INTERMEDIATE_PROD"
+    },
+    "dashboards_marketing": {
+      "dev_schema": "DASHBOARDS_MARKETING_DEV",
+      "prod_schema": "DASHBOARDS_MARKETING_PROD"
+    }
+  }
+}
