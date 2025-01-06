@@ -54,7 +54,7 @@ keyrings-alt = "^5.0.2"
 [[tool.poetry.source]]
 # data-and-insights group repository
 name = "gitlab_v2"
-url = "https://gitlab.clever-touch.com/api/v4/groups/17/-/packages/pypi/simple"
+url = "https://gitlab.clever-touch.com/api/v4/groups/63/-/packages/pypi/simple"
 priority = "supplemental"
 
 [tool.black]
