@@ -20,21 +20,13 @@
 
 ## 1. CI/CD Setup
 This section describes how to setup the package initially for automated code checking and testing.
+As standard it runs all the tests in the `testing` folder and runs black/ruff and MyPy with MyPy being allowed to fail.
 
-Turn on Project CI/CD setting:
+To get this running initially, turn on Project CI/CD setting:
 - Go to Settings -> General -> Visibility, project features, permissions
 - Tick the CI/CD option and press save
 
-### 1.1. CI/CD for a package
-To convert the CI/CD setup to run for a package rather than a project set `package-mode = true` in pyproject.toml. This
-lets poetry know to use the build functionality.
-
-Further steps:
-- add `author = [Your Name]` and `description = "Package Description"` to the `[tool.poetry]` of the pyproject.toml
-- add a CI/CD Variable (Settings -> CI/CD) called `GITLAB_TOKEN_PROJECT` with a personal access token (this may no longer be required
-once the group access token is set up)
-
-### 1.2. Keyring Values
+### 1.1. Keyring Values
 If secrets are required for testing/using the package these can be set up as CI/CD variables with the following naming convention
 ({keyring-name} represents a set of credentials e.g. InternalSnowflake or InternalMarketo):
 - KEYRING_{keyring-name}_KEEPER: the Keeper ID for the credentials
@@ -45,27 +37,16 @@ If secrets are required for testing/using the package these can be set up as CI/
 - `KEYRING_MARKETO_URL`: `https://marketo.com`
 - `KEYRING_MARKETO_CLIENT_ID`: `sdgklsdngjnadgadnvljkad`
 
-### 1.3. Bump Labels
-When merging from dev -> main we need to set a label based on the size of change which has been made
-if no label is set we default to a bugfix.
-
-#### bump-major
-Use for backward-incompatible updates, such as removing or renaming public APIs. Increments the major version (e.g., 1.2.3 to 2.0.0).
-
-#### bump-minor
-Use for backward-compatible feature additions. Increments the minor version (e.g., 1.2.3 to 1.3.0).
-
-#### No Label (patch)
-Use for bug fixes or non-breaking updates. Increments the patch version (e.g., 1.2.3 to 1.2.4).
-
-**Note:** Labels should be applied before merging to ensure the pipeline detects the correct version bump.
-
 ## 2. Getting Started
-1. Create and activate a virtual environment.
+1. Follow the instructions in Notion to get poetry set up on your computer.
 2. Install the pre-commit hook with `pre-commit install`.
-3. Install requirements with `pip install poetry` and `poetry install`.
+3. Install requirements with `poetry install`. (this will probably have run automatically)
 4. To add a new requirement, use `poetry add {package}`.
 5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine.
+  - avoid using the `config.py` file to store secrets. Instead use the Credentials Manager package.
+6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
+the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
+version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
 
 ## 3. Background
  - Write a short description of the project and the problem it solves.
@@ -79,15 +60,15 @@ Use for bug fixes or non-breaking updates. Increments the patch version (e.g., 1
 ## 6. Branches
  - Describe the branches that are used in this project.
 
-### 7.1. main
+### 6.1. main
  - The Main Branch contains the latest working code that has passed all tests and can be used for running flows for production.
  - The Main Branch is protected and can only be merged into from the dev Branch.
 
-### 7.2. dev
+### 6.2. dev
 - The Dev branch is where all development work is merged and tested. Should be used for running flows for testing.
 - The Dev Branch is protected and can only be merged into from feature branches.
 
-### 7.3. feature branches
+### 6.3. feature branches
 - Feature branches are created for each new feature that is being worked on.
 - Feature branches are created from the dev branch and merged back into the dev branch once the feature is complete.
 - Feature branches should be deleted once they have been merged into the dev branch.
