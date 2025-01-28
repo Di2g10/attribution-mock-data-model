@@ -8,10 +8,32 @@ import re
 
 from pathlib import Path
 from collections import defaultdict, deque
-from typing import List
+from typing import List, Dict, Tuple, Union, Any
+from clevertouch_internal_tools.utils.credentials_manager import SnowflakeCredentials
+
+from set_keyring_from_env import set_keyring
 
 
-def topological_sort(views_dir: Path) -> List[Path]:
+def read_setup() -> Tuple[str, Dict[str, str], Dict[str, str]]:
+    """Read Snowflake Schema Setup file."""
+    with Path("../gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
+        raw_config = json.load(raw_json)
+
+    keeper_id: str = raw_config["keeper_id"]
+
+    mapping = {
+        stage["dev_schema"]: stage["prod_schema"] for _, stage in raw_config["stages"].items()
+    }
+
+    snowflake_config = {
+        "role": raw_config["snowflake_role"],
+        "database": raw_config["snowflake_database"],
+    }
+
+    return keeper_id, mapping, snowflake_config
+
+
+def topological_sort(views_dir: Path) -> List[Union[Any, Path]]:
     """Topological sort of views in directory graph."""
     # Pattern to match references like EXAMPLE_DB.EXAMPLE_DEV.EXAMPLE_VIEW in the view query
     # excludes when it is preceded by 'view' - so we don't include the view reference
@@ -83,30 +105,28 @@ def topological_sort(views_dir: Path) -> List[Path]:
     if len(ordered_views) != len(view_names_mapping):
         raise Exception("Cycle detected in view dependencies!")
 
-    return [view_names_mapping[view] for view in ordered_views]
+    return [(view, view_names_mapping[view]) for view in ordered_views]
 
 
-def determine_deploy_order() -> List[Path]:
+def determine_deploy_order() -> List[Union[Any, Path]]:
     """Deploy the views from dev -> prod on Snowflake."""
-    stage_path = Path("./snowflake_views")
+    stage_path = Path("../snowflake_views")
     return topological_sort(stage_path)
 
 
-def check_keeper_id() -> None:
-    """Check that the keeper ID has been update in Snowflake."""
-    with Path("./gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
-        raw_config = json.load(raw_json)
+def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
+    """Test the CI variables are set up correctly to allow a connection to Snowflake."""
+    # set variables in keyring based off CI variables
+    set_keyring()
 
-    keeper_id: str = raw_config["keeper_id"]
-
-    if keeper_id == "EXAMPLE_KEEPER_ID":
-        raise ValueError(
-            "Keeper ID not set: Update the Keeper Value to the client's keeper ID and "
-            "set the values in the GitLab CI Variables."
-        )
+    # create a SnowflakeCreds class which tests the credentials authenticate
+    return SnowflakeCredentials(keeper_id, keyring_preset=True)
 
 
 if __name__ == "__main__":
     # check that there are no loops and the deployment can happen successfully
-    check_keeper_id()
+    keeper_id, mapping, snowflake_config = read_setup()
     print(f"Push Order: {determine_deploy_order()}")
+
+    create_snowflake_connection(keeper_id)
+    print("Connection Successful")

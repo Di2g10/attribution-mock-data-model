@@ -2,58 +2,76 @@
 
 from typing import List, Dict, Tuple
 from pathlib import Path
-import json
 
-import snowflake
-
-from set_keyring_from_env import set_keyring
-from snowflake_check_deploy import determine_deploy_order
-from clevertouch_internal_tools.utils.credentials_manager import SnowflakeCredentials
+from snowflake.snowpark import Session
+from snowflake_check_deploy import determine_deploy_order, read_setup, create_snowflake_connection
 
 
-def read_setup() -> Tuple[str, Dict[str, str]]:
-    """Read Snowflake Schema Setup file."""
-    with Path("./gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
-        raw_config = json.load(raw_json)
+def clear_old_views(
+    session: Session, dev_views: List[str], database: str, mapping: Dict[str, str]
+) -> None:
+    """Remove any views which no longer exist in DEV but previous existed in PROD."""
+    # get all prod views in the database where the schema is in the dev-prod mapping
+    prod_views = [
+        f"{row.database_name}.{row.schema_name}.{row.name}"
+        for row in session.sql(f"SHOW VIEWS IN DATABASE {database}").collect()
+        if row.schema_name in mapping.values()
+    ]
 
-    keeper_id: str = raw_config["keeper_id"]
+    dev_views_mapped = [
+        dev_view.replace(dev_schema, prod_schema)  # replace _DEV with _PROD
+        for (dev_schema, prod_schema) in mapping.items()  # try all mappings
+        for dev_view in dev_views  # for all dev views
+        if dev_schema
+        in dev_view  # if the dev schema is present in the view - ensures no duplicates
+    ]
 
-    mapping = {
-        stage["dev_schema"]: stage["prod_schema"] for _, stage in raw_config["stages"].items()
-    }
+    prod_views_to_remove = [
+        prod_view for prod_view in prod_views if prod_view not in dev_views_mapped
+    ]
 
-    return keeper_id, mapping
+    for prod_view in prod_views_to_remove:
+        print(f"Dropping view {prod_view}")
+        session.sql(f"DROP VIEW {prod_view}").collect()
 
 
-def push_to_snowflake(ordered_paths: List[Path], keeper_id: str, mapping: Dict[str, str]) -> None:
+def push_to_snowflake(
+    ordered_paths: List[Tuple[str, Path]],
+    keeper_id: str,
+    mapping: Dict[str, str],
+    snowflake_config: Dict[str, str],
+) -> None:
     """Push the views to the Snowflake Prod Schemas."""
-    set_keyring()
-    creds = SnowflakeCredentials(keeper_id)
+    creds = create_snowflake_connection(keeper_id)
 
     if isinstance(mapping, dict):
         dev_prod_mapping: Dict[str, str] = mapping
     else:
         raise ValueError("Expected 'mapping' to be a dictionary.")
 
-    ctx = snowflake.connector.connect(
-        user=creds.username, password=creds.password, account=creds.account
-    )
+    session = creds.connect()
+    session.use_role(snowflake_config["snowflake_role"])
 
     print(f"Ordered Paths: {ordered_paths}")
 
-    for file_path in ordered_paths:
+    dev_views = [ordered_path[0] for ordered_path in ordered_paths]
+    clear_old_views(session, dev_views, snowflake_config["database"], mapping)
+
+    for view_name, file_path in ordered_paths:
         with file_path.open("r", encoding="utf-8") as f:
             prod_sql = f.read()
+
         print(f"Pushing SQL File: {file_path} into Prod.")
         for dev, prod in dev_prod_mapping.items():
             prod_sql = prod_sql.replace(dev, prod)
-        with ctx.cursor() as cur:
+
+        with session.connection.cursor() as cur:
             cur.execute(prod_sql)
 
-    ctx.close()
+    session.close()
 
 
 if __name__ == "__main__":
-    keeper_id, mapping = read_setup()
+    keeper_id, mapping, snowflake_config = read_setup()
     ordered_paths = determine_deploy_order()
-    push_to_snowflake(ordered_paths, keeper_id, mapping)
+    push_to_snowflake(ordered_paths, keeper_id, mapping, snowflake_config)
