@@ -16,7 +16,7 @@ from set_keyring_from_env import set_keyring
 
 def read_setup() -> Tuple[str, Dict[str, str], Dict[str, str]]:
     """Read Snowflake Schema Setup file."""
-    with Path("../gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
+    with Path("./gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
         raw_config = json.load(raw_json)
 
     keeper_id: str = raw_config["keeper_id"]
@@ -110,7 +110,7 @@ def topological_sort(views_dir: Path) -> List[Union[Any, Path]]:
 
 def determine_deploy_order() -> List[Union[Any, Path]]:
     """Deploy the views from dev -> prod on Snowflake."""
-    stage_path = Path("../snowflake_views")
+    stage_path = Path("./snowflake_views")
     return topological_sort(stage_path)
 
 
