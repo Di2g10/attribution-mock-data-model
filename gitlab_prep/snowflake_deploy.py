@@ -50,7 +50,7 @@ def push_to_snowflake(
         raise ValueError("Expected 'mapping' to be a dictionary.")
 
     session = creds.connect()
-    session.use_role(snowflake_config["snowflake_role"])
+    session.use_role(snowflake_config["role"])
 
     print(f"Ordered Paths: {ordered_paths}")
 
