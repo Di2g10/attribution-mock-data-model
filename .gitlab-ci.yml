@@ -82,6 +82,7 @@ test_snowflake:
   extends: .python_template
   image: "python:3.11"
   script:
+    - poetry install --with test
     - python gitlab_prep/snowflake_check_deploy.py
   rules:
     - changes:
