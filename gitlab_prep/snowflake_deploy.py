@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple
 from pathlib import Path
 
 from snowflake.snowpark import Session
-from snowflake_check_deploy import determine_deploy_order, read_setup, create_snowflake_connection
+from snowflake_check_deploy import create_deploy_order, read_setup, create_snowflake_connection
 
 
 def clear_old_views(
@@ -59,19 +59,24 @@ def push_to_snowflake(
 
     for view_name, file_path in ordered_paths:
         with file_path.open("r", encoding="utf-8") as f:
-            prod_sql = f.read()
+            dev_sql = f.read()
 
-        print(f"Pushing SQL File: {file_path} into Prod.")
+        prod_sql = dev_sql
         for dev, prod in dev_prod_mapping.items():
             prod_sql = prod_sql.replace(dev, prod)
 
         with session.connection.cursor() as cur:
-            cur.execute(prod_sql)
+            print(f"Pushing SQL File: {file_path} into Dev.")
+            cur.execute(dev_sql)  # update DEV to match Prod
+
+        with session.connection.cursor() as cur:
+            print(f"Pushing SQL File: {file_path} into Prod.")
+            cur.execute(prod_sql)  # update PROD
 
     session.close()
 
 
 if __name__ == "__main__":
     keeper_id, mapping, snowflake_config = read_setup()
-    ordered_paths = determine_deploy_order()
+    ordered_paths = create_deploy_order()
     push_to_snowflake(ordered_paths, keeper_id, mapping, snowflake_config)
