@@ -33,17 +33,22 @@ def read_setup() -> Tuple[str, Dict[str, str], Dict[str, str]]:
     return keeper_id, mapping, snowflake_config
 
 
-def topological_sort(views_dir: Path) -> List[Union[Any, Path]]:
+def determine_deploy_order(views_dir: Path) -> List[Union[Any, Path]]:
     """Topological sort of views in directory graph."""
-    # Pattern to match references like EXAMPLE_DB.EXAMPLE_DEV.EXAMPLE_VIEW in the view query
+    supported_snowflake_objects = ["VIEW", "FUNCTION"]
+
+    # Pattern to match references like EXAMPLE_DB.EXAMPLE_DEV.EXAMPLE_VIEW in the object query
     # excludes when it is preceded by 'view' - so we don't include the view reference
     fully_qualified_pattern = re.compile(
-        r"(?<!VIEW\s)\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b", re.IGNORECASE
+        "".join([rf"(?<!{obj}\s)" for obj in supported_snowflake_objects])
+        + r"\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b",
+        re.IGNORECASE,
     )
 
-    # Pattern to get view names from files
+    # Pattern to get object names from files
     view_names_pattern = re.compile(
-        r"VIEW\s\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b", re.IGNORECASE
+        rf"(?:{'|'.join([fr'{obj}' for obj in supported_snowflake_objects])})\s\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b",
+        re.IGNORECASE,
     )
 
     # Collect all view SQL files
@@ -59,9 +64,12 @@ def topological_sort(views_dir: Path) -> List[Union[Any, Path]]:
         # Find references
         refs = view_names_pattern.findall(sql_content)
 
+        if len(refs) == 0:
+            raise ValueError(f"Unsupported object found in {file}.")
+
         if len(refs) > 1:
             raise ValueError(
-                "Multiple views found in the same file. Please put views in separate files."
+                "Multiple Snowflake objects found in the same file. Each object needs to be in a different file."
             )
         view_names_mapping[refs[0]] = file
 
@@ -108,10 +116,10 @@ def topological_sort(views_dir: Path) -> List[Union[Any, Path]]:
     return [(view, view_names_mapping[view]) for view in ordered_views]
 
 
-def determine_deploy_order() -> List[Union[Any, Path]]:
+def create_deploy_order() -> List[Union[Any, Path]]:
     """Deploy the views from dev -> prod on Snowflake."""
     stage_path = Path("./snowflake_views")
-    return topological_sort(stage_path)
+    return determine_deploy_order(stage_path)
 
 
 def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
@@ -126,7 +134,7 @@ def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
 if __name__ == "__main__":
     # check that there are no loops and the deployment can happen successfully
     keeper_id, mapping, snowflake_config = read_setup()
-    print(f"Push Order: {determine_deploy_order()}")
+    print(f"Push Order: {create_deploy_order()}")
 
     create_snowflake_connection(keeper_id)
     print("Connection Successful")
