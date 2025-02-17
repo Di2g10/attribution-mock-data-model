@@ -15,16 +15,12 @@
 | Main   | Maintainers             | No one          |
 | Dev    | Developers and maintainers | No one      |
 
-  - Default branch should be Dev
+- Default branch should be Dev
 - Delete this section of the template.
 
 ## 1. CI/CD Setup
 This section describes how to setup the package initially for automated code checking and testing.
 As standard it runs all the tests in the `testing` folder and runs black/ruff and MyPy with MyPy being allowed to fail.
-
-To get this running initially, turn on Project CI/CD setting:
-- Go to Settings -> General -> Visibility, project features, permissions
-- Tick the CI/CD option and press save
 
 ### 1.1. Keyring Values
 If secrets are required for testing/using the package these can be set up as CI/CD variables with the following naming convention
@@ -36,6 +32,15 @@ If secrets are required for testing/using the package these can be set up as CI/
 - `KEYRING_MARKETO_KEEPER`: `EXAMPLEKEEPERID`
 - `KEYRING_MARKETO_URL`: `https://marketo.com`
 - `KEYRING_MARKETO_CLIENT_ID`: `sdgklsdngjnadgadnvljkad`
+
+### 1.2. Snowflake Environment Setup
+To setup this project to work with the Snowflake environments managed by GitLab you need to configure
+the `gitlab_prep/snowflake_schema_setup.json` file to contain the configuration related to your project.
+
+The Keeper Credentials then need to be set in the CI/CD Variables as described above. Snowflake requires the following:
+- USERNAME: the username for logging in
+- PASSWORD: the password for logging in
+- ACCOUNT: the account from the url, e.g. 'am20982.europe-west2.gcp'
 
 ## 2. Getting Started
 1. Follow the instructions in Notion to get poetry set up on your computer.
