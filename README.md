@@ -16,6 +16,7 @@
 | Dev    | Developers and maintainers | No one      |
 
 - Default branch should be Dev
+- Create a new branch to start working in
 - Delete this section of the template.
 
 ## 1. CI/CD Setup
@@ -52,6 +53,10 @@ The Keeper Credentials then need to be set in the CI/CD Variables as described a
 6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
 the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
 version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
+
+### Quick Start Projects
+- Snowflake Connect and SQL: [Link](src/function_group/snowflake_quickstart.py)
+- Marketo API Requests: [Link](src/function_group/marketo_api_quickstart.py)
 
 ## 3. Background
  - Write a short description of the project and the problem it solves.
