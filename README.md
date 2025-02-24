@@ -49,7 +49,7 @@ The Keeper Credentials then need to be set in the CI/CD Variables as described a
 3. Install requirements with `poetry install`. (this will probably have run automatically)
 4. To add a new requirement, use `poetry add {package}`.
 5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine.
-  - avoid using the `config.py` file to store secrets. Instead use the Credentials Manager package.
+   - avoid using the `config.py` file to store secrets. Instead use the Credentials Manager package.
 6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
 the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
 version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
