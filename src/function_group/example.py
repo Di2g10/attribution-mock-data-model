@@ -10,8 +10,8 @@ def example(x: int) -> int:
     return x + 1
 
 
-def _main() -> None:
-    # example demonstrating function
+def main() -> None:
+    """Demo function."""
     x = 1
     print(f"input: {x} => {example(x)}")
 
@@ -19,4 +19,4 @@ def _main() -> None:
 if __name__ == "__main__":
     # To ensure this code is only run when this module is directly run.
     # And not executed when module is imported
-    _main()
+    main()

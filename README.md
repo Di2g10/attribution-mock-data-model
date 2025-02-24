@@ -15,16 +15,13 @@
 | Main   | Maintainers             | No one          |
 | Dev    | Developers and maintainers | No one      |
 
-  - Default branch should be Dev
+- Default branch should be Dev
+- Create a new branch to start working in
 - Delete this section of the template.
 
 ## 1. CI/CD Setup
 This section describes how to setup the package initially for automated code checking and testing.
 As standard it runs all the tests in the `testing` folder and runs black/ruff and MyPy with MyPy being allowed to fail.
-
-To get this running initially, turn on Project CI/CD setting:
-- Go to Settings -> General -> Visibility, project features, permissions
-- Tick the CI/CD option and press save
 
 ### 1.1. Keyring Values
 If secrets are required for testing/using the package these can be set up as CI/CD variables with the following naming convention
@@ -37,16 +34,29 @@ If secrets are required for testing/using the package these can be set up as CI/
 - `KEYRING_MARKETO_URL`: `https://marketo.com`
 - `KEYRING_MARKETO_CLIENT_ID`: `sdgklsdngjnadgadnvljkad`
 
+### 1.2. Snowflake Environment Setup
+To setup this project to work with the Snowflake environments managed by GitLab you need to configure
+the `gitlab_prep/snowflake_schema_setup.json` file to contain the configuration related to your project.
+
+The Keeper Credentials then need to be set in the CI/CD Variables as described above. Snowflake requires the following:
+- USERNAME: the username for logging in
+- PASSWORD: the password for logging in
+- ACCOUNT: the account from the url, e.g. 'am20982.europe-west2.gcp'
+
 ## 2. Getting Started
 1. Follow the instructions in Notion to get poetry set up on your computer.
 2. Install the pre-commit hook with `pre-commit install`.
 3. Install requirements with `poetry install`. (this will probably have run automatically)
 4. To add a new requirement, use `poetry add {package}`.
 5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine.
-  - avoid using the `config.py` file to store secrets. Instead use the Credentials Manager package.
+   - avoid using the `config.py` file to store secrets. Instead use the Credentials Manager package.
 6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
 the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
 version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
+
+### Quick Start Projects
+- Snowflake Connect and SQL: [Link](src/function_group/snowflake_quickstart.py)
+- Marketo API Requests: [Link](src/function_group/marketo_api_quickstart.py)
 
 ## 3. Background
  - Write a short description of the project and the problem it solves.
