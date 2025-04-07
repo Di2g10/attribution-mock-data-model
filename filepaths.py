@@ -15,3 +15,5 @@ example_path = Path(
     "Data Team - Documents",
     "General",
 )
+
+ROOT_DIR = Path(__file__).resolve().parent
