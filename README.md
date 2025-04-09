@@ -1,11 +1,10 @@
-# Basic Project Template
+# Basic Project Template (Rename to project name)
 
-## 0. Create Fork
-- Fork this project into either a client specific folder if its for client work or into the shared tools folder if it would be used across multiple clients.
-- Discuss with the team your idea for a shared tool to ensure something doesn't already exist.
+## Template Setup (Remove once forked)
+- Fork this project into the client specific folder if it's for client work. Make sure it includes the clients name at the beginning of the project name (makes it easier to find in PyCharm)
 - Update forked project to default merge into itself rather than back to the template
   - Select Settings > Merge requests.
-  - In the Target project section, select the option you want to use for your default target project.
+  - At the bottom, in the Target project section, choose the new project as the default target project.
   - Select Save changes.
 - Create branch protections
   - Settings > Repository > Protected Branches
@@ -15,11 +14,19 @@
 | Main   | Maintainers             | No one          |
 | Dev    | Developers and maintainers | No one      |
 
-- Default branch should be Dev
-- Create a new branch to start working in
-- Delete this section of the template.
+## PyCharm Setup
+1. Create a new branch to start working in
+2. Install the pre-commit hook with `pre-commit install`.
+3. Install requirements with `poetry install`. (this will probably have run automatically)
+4. To add a new requirement, use `poetry add {package}`.
+5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine.
+   - avoid using the `config.py` file to store secrets. Instead, use the Credentials Manager package.
+6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
+the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
+version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
+7. Delete this section of the template.
 
-## 1. CI/CD Setup
+## 1. CI/CD Setup - For reference
 This section describes how to setup the package initially for automated code checking and testing.
 As standard it runs all the tests in the `testing` folder and runs black/ruff and MyPy with MyPy being allowed to fail.
 
@@ -42,17 +49,6 @@ The Keeper Credentials then need to be set in the CI/CD Variables as described a
 - USERNAME: the username for logging in
 - PASSWORD: the password for logging in
 - ACCOUNT: the account from the url, e.g. 'am20982.europe-west2.gcp'
-
-## 2. Getting Started
-1. Follow the instructions in Notion to get poetry set up on your computer.
-2. Install the pre-commit hook with `pre-commit install`.
-3. Install requirements with `poetry install`. (this will probably have run automatically)
-4. To add a new requirement, use `poetry add {package}`.
-5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine.
-   - avoid using the `config.py` file to store secrets. Instead use the Credentials Manager package.
-6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
-the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
-version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
 
 ### Quick Start Projects
 - Snowflake Connect and SQL: [Link](src/function_group/snowflake_quickstart.py)
