@@ -1,5 +1,6 @@
 """Deploy SQL scripts to Prod in Snowflake."""
 
+import argparse
 from typing import List, Dict, Tuple
 from pathlib import Path
 
@@ -40,8 +41,9 @@ def push_to_snowflake(
     keeper_id: str,
     mapping: Dict[str, str],
     snowflake_config: Dict[str, str],
+    target_env: str,
 ) -> None:
-    """Push the views to the Snowflake Prod Schemas."""
+    """Push the views to the Snowflake Schemas based on the target_env."""
     creds = create_snowflake_connection(keeper_id)
 
     if isinstance(mapping, dict):
@@ -61,13 +63,17 @@ def push_to_snowflake(
         with file_path.open("r", encoding="utf-8") as f:
             dev_sql = f.read()
 
-        prod_sql = dev_sql
-        for dev, prod in dev_prod_mapping.items():
-            prod_sql = prod_sql.replace(dev, prod)
-
         with session.connection.cursor() as cur:
             print(f"Pushing SQL File: {file_path} into Dev.")
             cur.execute(dev_sql)  # update DEV to match Prod
+
+        if target_env == "dev":
+            # if target env is only dev then don't also push into main
+            continue
+
+        prod_sql = dev_sql
+        for dev, prod in dev_prod_mapping.items():
+            prod_sql = prod_sql.replace(dev, prod)
 
         with session.connection.cursor() as cur:
             print(f"Pushing SQL File: {file_path} into Prod.")
@@ -77,6 +83,16 @@ def push_to_snowflake(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Deploy SQL scripts to Snowflake environment.")
+    parser.add_argument(
+        "--env",
+        choices=["dev", "prod"],
+        default="dev",
+        help="Target environment for deployment: dev, prod (default: dev)",
+    )
+    args = parser.parse_args()
+
     keeper_id, mapping, snowflake_config = read_setup()
-    ordered_paths = create_deploy_order()
-    push_to_snowflake(ordered_paths, keeper_id, mapping, snowflake_config)
+    ordered_paths = create_deploy_order(mapping)
+
+    push_to_snowflake(ordered_paths, keeper_id, mapping, snowflake_config, target_env=args.env)

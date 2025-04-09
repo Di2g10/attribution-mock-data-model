@@ -33,7 +33,7 @@ def read_setup() -> Tuple[str, Dict[str, str], Dict[str, str]]:
     return keeper_id, mapping, snowflake_config
 
 
-def determine_deploy_order(views_dir: Path) -> List[Union[Any, Path]]:
+def determine_deploy_order(views_dir: Path, mapping: Dict[str, str]) -> List[Union[Any, Path]]:
     """Topological sort of views in directory graph."""
     supported_snowflake_objects = ["VIEW", "FUNCTION"]
 
@@ -41,13 +41,18 @@ def determine_deploy_order(views_dir: Path) -> List[Union[Any, Path]]:
     # excludes when it is preceded by 'view' - so we don't include the view reference
     fully_qualified_pattern = re.compile(
         "".join([rf"(?<!{obj}\s)" for obj in supported_snowflake_objects])
-        + r"\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b",
+        + r"\b([A-Z_]+\."  # database
+        rf"(?:{'|'.join(mapping.keys())})"  # schema
+        r"\.[A-Za-z0-9_]+)\b",  # object
         re.IGNORECASE,
     )
 
     # Pattern to get object names from files
     view_names_pattern = re.compile(
-        rf"(?:{'|'.join([fr'{obj}' for obj in supported_snowflake_objects])})\s\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b",
+        rf"(?:{'|'.join([fr'{obj}' for obj in supported_snowflake_objects])})"
+        r"\s\b([A-Z_]+\."  # database
+        rf"(?:{'|'.join(mapping.keys())})"  # schema
+        r"\.[A-Za-z0-9_]+)\b",  # object
         re.IGNORECASE,
     )
 
@@ -116,10 +121,10 @@ def determine_deploy_order(views_dir: Path) -> List[Union[Any, Path]]:
     return [(view, view_names_mapping[view]) for view in ordered_views]
 
 
-def create_deploy_order() -> List[Union[Any, Path]]:
+def create_deploy_order(mapping: Dict[str, str]) -> List[Union[Any, Path]]:
     """Deploy the views from dev -> prod on Snowflake."""
     stage_path = Path("./snowflake_views")
-    return determine_deploy_order(stage_path)
+    return determine_deploy_order(stage_path, mapping)
 
 
 def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
@@ -134,7 +139,7 @@ def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
 if __name__ == "__main__":
     # check that there are no loops and the deployment can happen successfully
     keeper_id, mapping, snowflake_config = read_setup()
-    print(f"Push Order: {create_deploy_order()}")
+    print(f"Push Order: {create_deploy_order(mapping)}")
 
     create_snowflake_connection(keeper_id)
     print("Connection Successful")
