@@ -5,6 +5,7 @@ Run when merging from dev into main.
 
 import json
 import re
+from dataclasses import dataclass
 
 from pathlib import Path
 from collections import defaultdict, deque
@@ -14,40 +15,57 @@ from clevertouch_internal_tools.utils.credentials_manager import SnowflakeCreden
 from set_keyring_from_env import set_keyring
 
 
-def read_setup() -> Tuple[str, Dict[str, str], Dict[str, str]]:
+@dataclass
+class SchemaMapping:
+    """Represents a mapping between a dev schema and a production schema."""
+
+    dev_schema: str
+    prod_schema: str
+
+
+def read_setup() -> Tuple[str, List[SchemaMapping], Dict[str, str]]:
     """Read Snowflake Schema Setup file."""
     with Path("./gitlab_prep/snowflake_schema_setup.json").open("r") as raw_json:
         raw_config = json.load(raw_json)
 
     keeper_id: str = raw_config["keeper_id"]
 
-    mapping = {
-        stage["dev_schema"]: stage["prod_schema"] for _, stage in raw_config["stages"].items()
-    }
+    mappings = [
+        SchemaMapping(dev_schema=stage["dev_schema"], prod_schema=stage["prod_schema"])
+        for _, stage in raw_config["stages"].items()
+    ]
 
     snowflake_config = {
         "role": raw_config["snowflake_role"],
         "database": raw_config["snowflake_database"],
     }
 
-    return keeper_id, mapping, snowflake_config
+    return keeper_id, mappings, snowflake_config
 
 
-def determine_deploy_order(views_dir: Path) -> List[Union[Any, Path]]:
+def determine_deploy_order(
+    views_dir: Path, mappings: List[SchemaMapping]
+) -> List[Union[Any, Path]]:
     """Topological sort of views in directory graph."""
     supported_snowflake_objects = ["VIEW", "FUNCTION"]
 
     # Pattern to match references like EXAMPLE_DB.EXAMPLE_DEV.EXAMPLE_VIEW in the object query
     # excludes when it is preceded by 'view' - so we don't include the view reference
+    dev_schemas = [mapping.dev_schema for mapping in mappings]
     fully_qualified_pattern = re.compile(
         "".join([rf"(?<!{obj}\s)" for obj in supported_snowflake_objects])
-        + r"\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b",
+        + r"\b([A-Z_]+\."  # database
+        rf"(?:{'|'.join(dev_schemas)})"  # schema
+        r"\.[A-Za-z0-9_]+)\b",  # object
         re.IGNORECASE,
     )
 
     # Pattern to get object names from files
     view_names_pattern = re.compile(
-        rf"(?:{'|'.join([fr'{obj}' for obj in supported_snowflake_objects])})\s\b([A-Z_]+\.[A-Z_]+_DEV\.[A-Za-z0-9_]+)\b",
+        rf"(?:{'|'.join([fr'{obj}' for obj in supported_snowflake_objects])})"
+        r"\s\b([A-Z_]+\."  # database
+        rf"(?:{'|'.join(dev_schemas)})"  # schema
+        r"\.[A-Za-z0-9_]+)\b",  # object
         re.IGNORECASE,
     )
 
@@ -116,10 +134,10 @@ def determine_deploy_order(views_dir: Path) -> List[Union[Any, Path]]:
     return [(view, view_names_mapping[view]) for view in ordered_views]
 
 
-def create_deploy_order() -> List[Union[Any, Path]]:
+def create_deploy_order(mappings: List[SchemaMapping]) -> List[Union[Any, Path]]:
     """Deploy the views from dev -> prod on Snowflake."""
     stage_path = Path("./snowflake_views")
-    return determine_deploy_order(stage_path)
+    return determine_deploy_order(stage_path, mappings)
 
 
 def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
@@ -133,8 +151,8 @@ def create_snowflake_connection(keeper_id: str) -> SnowflakeCredentials:
 
 if __name__ == "__main__":
     # check that there are no loops and the deployment can happen successfully
-    keeper_id, mapping, snowflake_config = read_setup()
-    print(f"Push Order: {create_deploy_order()}")
+    keeper_id, mappings, snowflake_config = read_setup()
+    print(f"Push Order: {create_deploy_order(mappings)}")
 
     create_snowflake_connection(keeper_id)
     print("Connection Successful")
