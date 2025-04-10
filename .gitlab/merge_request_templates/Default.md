@@ -1,6 +1,6 @@
 ## QA Checklist (filled out by reviewer)
 - [ ] Code passes Ruff, Black and MyPy.
-- [ ] Code follows expected best practices
+- [ ] Code follows expected best practices (PEP Guidelines)
 - [ ] All tests passing
 - [ ] Tests added for core functionality
 - [ ] Read Me/Documentation updated
