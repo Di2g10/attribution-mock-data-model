@@ -9,9 +9,24 @@ cache:
 
 # Define shared settings for all Python jobs
 stages:
+  - validate
   - code_quality
   - test
   - build_and_deploy
+
+# New validation job to ensure MR source branch requirements
+validate_merge_request:
+  stage: validate
+  script:
+    - |
+      if [ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" = "main" ] && [ "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" != "dev" ]; then
+        echo "Error: Merge requests into main must originate from the dev branch (found: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME)."
+        exit 1
+      else
+        echo "Merge request validated."
+      fi
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID'
 
 before_script:
   - apt-get update && apt-get install -y git
