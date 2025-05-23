@@ -1,0 +1,39 @@
+﻿type,typeName,activityName,score
+1,Visit Tracker,Visit Tracker Click,10
+1,Landing Page Tracker,Landing Page Tracker Click,10
+1,Paid Ad Search,Paid Ad Search Click,10
+1,Form Tracker,Form Tracker Click,10
+2,Form,Form View,10
+2,Landing Page,Landing Page View,10
+2,File,File View,10
+2,Multivariate Landing Page,Multivariate Landing Page View,10
+3,Multivariate Landing Page,Multivariate Landing Page Error,10
+3,Landing Page,Landing Page Error,10
+3,Form Handler,Form Handler Error,10
+3,Form,Form Error,10
+4,Multivariate Landing Page,Multivariate Landing Page Success,10
+4,Landing Page,Landing Page Success,10
+4,Form Handler,Form Handler Success,10
+4,Form,Form Success,10
+5,Visitor,Page Views Visitor,10
+7,Site Search Query,Site Search Query Search,10
+20,Visit,Page Views Session Visit,10
+21,Custom Redirect,Custom Redirect Click,10
+1,Email Tracker,Email Click,10
+6,Email,Email Sent,10
+15,,Email Preference Open,10
+16,Email,Email Opt In,10
+37,Email,Email Indirect Opt In,10
+11,Email,Email Open,10
+12,Email,Email Unsubscribe Open,10
+35,Email,Email Indirect Unsubscribe Open,10
+13,Email,Email Bounce,10
+36,Email,Email Indirect Bounce,10
+14,Email,Email Spam Complaint,10
+17,Email,Email Third Party Click,10
+8,New Opportunity,New Opportunity,10
+9,Opportunity Won,Opportunity Won,10
+10,Opportunity Lost,Opportunity Lost,10
+18,Opportunity Reopen,Opportunity Reopen,10
+19,Opportunity Associated,Opportunity Associated,10
+38,Opportunity Dissociated,Opportunity Dissociated,10

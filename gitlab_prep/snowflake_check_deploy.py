@@ -136,7 +136,7 @@ def determine_deploy_order(
 
 def create_deploy_order(mappings: List[SchemaMapping]) -> List[Union[Any, Path]]:
     """Deploy the views from dev -> prod on Snowflake."""
-    stage_path = Path("./snowflake_views")
+    stage_path = Path("./snowflake/snowflake_views")
     return determine_deploy_order(stage_path, mappings)
 
 
