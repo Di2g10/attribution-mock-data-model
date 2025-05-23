@@ -1,0 +1,53 @@
+﻿type,typeName,activityName
+1,Visit Tracker,Visit Tracker Click
+1,Landing Page Tracker,Landing Page Tracker Click
+1,Paid Ad Search,Paid Ad Search Click
+1,Form Tracker,Form Tracker Click
+1,Email Tracker,Email Click
+2,Form,Form View
+2,Landing Page,Landing Page View
+2,File,File View
+2,Multivariate Landing Page,Multivariate Landing Page View
+3,Multivariate Landing Page,Multivariate Landing Page Error
+3,Landing Page,Landing Page Error
+3,Form Handler,Form Handler Error
+3,Form,Form Error
+4,Multivariate Landing Page,Multivariate Landing Page Success
+4,Landing Page,Landing Page Success
+4,Form Handler,Form Handler Success
+4,Form,Form Success
+5,Visitor,Page Views Visitor
+6,Email,Email Sent
+7,Site Search Query,Site Search Query Search
+8,New Opportunity,New Opportunity
+9,Opportunity Won,Opportunity Won
+10,Opportunity Lost,Opportunity Lost
+11,Email,Email Open
+12,Email,Email Unsubscribe Open
+13,Email,Email Bounce
+14,Email,Email Spam Complaint
+15,,Email Preference Open
+16,Email,Email Opt In
+17,Email,Email Third Party Click
+18,Opportunity Reopen,Opportunity Reopen
+19,Opportunity Associated,Opportunity Associated
+20,Visit,Page Views Session Visit
+21,Custom Redirect,Custom Redirect Click
+22,,Olark Chat
+23,,Invited to Webinar
+24,,Attended Webinar
+25,,Registered for Webinar
+26,,Social Post Click
+27,,Video View
+28,,Event Registered
+29,,Event Checked In
+30,,Video Conversion
+31,,UserVoice Suggestion
+32,,UserVoice Comment
+33,,UserVoice Ticket
+34,,Video Watched (≥ 75% watched)
+35,Email,Email Indirect Unsubscribe Open
+35,,Indirect Unsubscribe Open
+36,Email,Email Indirect Bounce
+37,Email,Email Indirect Opt In
+38,Opportunity Dissociated,Opportunity Dissociated

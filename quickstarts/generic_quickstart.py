@@ -1,7 +1,7 @@
-"""Contains some example code for the project."""
+"""Basic quickstart including importing the internal tools package and showing expected structure of a project."""
 
 
-def example(x: int) -> int:
+def example_function(x: int) -> int:
     """Add one to the input.
 
     :param x: input expected to be any integer
@@ -10,13 +10,8 @@ def example(x: int) -> int:
     return x + 1
 
 
-def main() -> None:
-    """Demo function."""
-    x = 1
-    print(f"input: {x} => {example(x)}")
-
-
 if __name__ == "__main__":
     # To ensure this code is only run when this module is directly run.
     # And not executed when module is imported
-    main()
+    x = 1
+    print(f"input: {x} => {example_function(x)}")

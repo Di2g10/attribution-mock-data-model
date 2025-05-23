@@ -1,11 +1,26 @@
-# Basic Project Template (Rename to project name)
+# Client Project Name
 
-## Template Setup (Remove once forked)
-- Fork this project into the client specific folder if it's for client work. Make sure it includes the clients name at the beginning of the project name (makes it easier to find in PyCharm)
+## Overview
+*Replace this with a concise description of the project and the problem it solves.*
+
+### Quick Start Examples
+The project includes several quickstart examples to help you get started:
+
+- **Snowflake Connect and SQL**: [Link](quickstarts/snowflake_quickstart.py)
+- **Marketo API Requests**: [Link](quickstarts/marketo_api_quickstart.py)
+
+*Related Workfront tasks:*
+- *WF-12345: Initial project setup*
+- *WF-12346: Feature implementation*
+
+## Project Setup
+
+### Initial Repository Setup
+- Fork this project into the client-specific folder if it's for client work. Make sure it includes the client's name at the beginning of the project name (makes it easier to find in PyCharm)
 - Update forked project to default merge into itself rather than back to the template
-  - Select Settings > Merge requests.
-  - At the bottom, in the Target project section, choose the new project as the default target project.
-  - Select Save changes.
+  - Select Settings > Merge requests
+  - At the bottom, in the Target project section, choose the new project as the default target project
+  - Select Save changes
 - Create branch protections
   - Settings > Repository > Protected Branches
 
@@ -14,68 +29,88 @@
 | Main   | Maintainers             | No one          |
 | Dev    | Developers and maintainers | No one      |
 
-## PyCharm Setup
+### Development Environment Setup
 1. Create a new branch to start working in
-2. Install the pre-commit hook with `pre-commit install`.
-3. Install requirements with `poetry install`. (this will probably have run automatically)
-4. To add a new requirement, use `poetry add {package}`.
-5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine.
-   - avoid using the `config.py` file to store secrets. Instead, use the Credentials Manager package.
-6. The `clevertouch-internal-tools` package will be installed by default, currently version 0.0.1. To upgrade this run
-the following command `poetry add clevertouch-internal-tools==0.0.1 --source gitlab_v2` where 0.0.1 is replaced with the
-version you would like. Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
-7. Delete this section of the template.
+2. Install the pre-commit hook with `pre-commit install`
+3. Install requirements with `poetry install` (this will probably have run automatically)
+4. To add a new requirement, use `poetry add {package}`
+5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine
+   - Avoid using the `config.py` file to store secrets. Instead, use the Credentials Manager package
+6. The `clevertouch-internal-tools` package will be installed by default. To upgrade this run:
+   ```
+   poetry add clevertouch-internal-tools==1.1.0 --source gitlab_v2
+   ```
+   Versions can be found here: [Gitlab Packages](https://gitlab.clever-touch.com/data-and-insights/shared-tools/clevertouch-internal-tools/-/packages)
 
-## 1. CI/CD Setup - For reference
-This section describes how to setup the package initially for automated code checking and testing.
-As standard it runs all the tests in the `testing` folder and runs black/ruff and MyPy with MyPy being allowed to fail.
+## Project Structure
+The project follows a modular structure with clear separation of concerns:
 
-### 1.1. Keyring Values
-If secrets are required for testing/using the package these can be set up as CI/CD variables with the following naming convention
-({keyring-name} represents a set of credentials e.g. InternalSnowflake or InternalMarketo):
-- KEYRING_{keyring-name}_KEEPER: the Keeper ID for the credentials
-- KEYRING_{keyring-name}_{secret}: the value of the secret where {secret} is the secret name
+```
+project-root/
+├── config_example.py           # Template for configuration settings
+├── data/                       # Data files and resources
+├── filepaths.py                # File path definitions
+├── gitlab_prep/                # GitLab CI/CD related scripts
+├── main.py                     # Main entry point for the application
+├── quickstarts/                # Example code for quick starts
+├── snowflake/                  # Snowflake SQL files and resources
+│   ├── snowflake_setup/        # Schema setup scripts
+│   ├── snowflake_static_files/ # Static data files for Snowflake
+│   └── snowflake_views/        # SQL view definitions
+├── src/                        # Source code
+│   └── example_group/         # Functional modules
+└── testing/                    # Test files mirroring the src structure
+```
+
+## Usage
+*Add instructions on how to use the project here.*
+
+## CI/CD Pipeline
+The project includes a GitLab CI/CD pipeline that automates code quality checks, testing, and deployment. The pipeline includes:
+
+1. **Validation**: Ensures merge requests to main come from the dev branch
+2. **Code Quality**: Runs Black, Ruff, SQL Fluff, and MyPy
+3. **Testing**: Runs unit tests with coverage reporting for Python 3.10 and 3.11
+4. **Build and Deploy**: Handles Snowflake deployments to dev and prod environments
+
+### Keyring Values
+If secrets are required for testing/using the package, these can be set up as CI/CD variables with the following naming convention:
+
+- `KEYRING_{keyring-name}_KEEPER`: the Keeper ID for the credentials
+- `KEYRING_{keyring-name}_{secret}`: the value of the secret where {secret} is the secret name
 
 **Example Variables:**
 - `KEYRING_MARKETO_KEEPER`: `EXAMPLEKEEPERID`
 - `KEYRING_MARKETO_URL`: `https://marketo.com`
 - `KEYRING_MARKETO_CLIENT_ID`: `sdgklsdngjnadgadnvljkad`
 
-### 1.2. Snowflake Environment Setup
-To setup this project to work with the Snowflake environments managed by GitLab you need to configure
-the `gitlab_prep/snowflake_schema_setup.json` file to contain the configuration related to your project.
+### Snowflake Environment Setup
+To set up this project to work with the Snowflake environments managed by GitLab:
 
-The Keeper Credentials then need to be set in the CI/CD Variables as described above. Snowflake requires the following:
-- USERNAME: the username for logging in
-- PASSWORD: the password for logging in
-- ACCOUNT: the account from the url, e.g. 'am20982.europe-west2.gcp'
+1. Configure the `gitlab_prep/snowflake_schema_setup.json` file with your project-specific settings
+2. Set the required Keeper Credentials in the CI/CD Variables:
+   - `USERNAME`: the username for logging in
+   - `PASSWORD`: the password for logging in
+   - `ACCOUNT`: the account from the URL, e.g., 'am20982.europe-west2.gcp'
 
-### Quick Start Projects
-- Snowflake Connect and SQL: [Link](src/function_group/snowflake_quickstart.py)
-- Marketo API Requests: [Link](src/function_group/marketo_api_quickstart.py)
+## Branch Structure and Workflow
 
-## 3. Background
- - Write a short description of the project and the problem it solves.
+### main
+- Contains the latest working code that has passed all tests
+- Used for running flows in production
+- Protected and can only be merged into from the dev branch
 
-## 4. Workfront tasks
- - List the workfront tasks that are related to this project.
+### dev
+- Where all development work is merged and tested
+- Used for running flows in testing environments
+- Protected and can only be merged into from feature branches
 
-## 5. Project Structure
- - Describe the project structure and the purpose of each folder.
-
-## 6. Branches
- - Describe the branches that are used in this project.
-
-### 6.1. main
- - The Main Branch contains the latest working code that has passed all tests and can be used for running flows for production.
- - The Main Branch is protected and can only be merged into from the dev Branch.
-
-### 6.2. dev
-- The Dev branch is where all development work is merged and tested. Should be used for running flows for testing.
-- The Dev Branch is protected and can only be merged into from feature branches.
-
-### 6.3. feature branches
-- Feature branches are created for each new feature that is being worked on.
-- Feature branches are created from the dev branch and merged back into the dev branch once the feature is complete.
-- Feature branches should be deleted once they have been merged into the dev branch.
-- Feature branches should be named using the following convention: feature/feature_name
+### feature branches
+- Created for each new feature or bugfix
+- Always branch from dev, not from other feature branches
+- Merge back into dev once the feature is complete
+- Should be deleted after merging
+- Naming convention: `feature/descriptive-name` or `bugfix/issue-description`
+- Keep feature branches short-lived and focused on a single task
+- Regularly pull changes from dev to avoid merge conflicts
+- Merge requests should be created to merge this into the dev branch
