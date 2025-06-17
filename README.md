@@ -31,8 +31,9 @@ The project includes several quickstart examples to help you get started:
 
 ### Development Environment Setup
 1. Create a new branch to start working in
-2. Install the pre-commit hook with `pre-commit install`
-3. Install requirements with `poetry install` (this will probably have run automatically)
+2. Close the Local Terminal and then open a new one
+2. Install requirements with `poetry install` (this will probably have run automatically)
+3. Install the pre-commit hook with `pre-commit install`
 4. To add a new requirement, use `poetry add {package}`
 5. Copy `config_example.py` to `config.py`, and adjust the project file path for your machine
    - Avoid using the `config.py` file to store secrets. Instead, use the Credentials Manager package
