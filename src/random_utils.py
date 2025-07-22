@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timedelta
+from typing import Sequence, TypeVar
 
 from numpy.random import Generator, default_rng
 from faker import Faker
@@ -50,3 +51,32 @@ def random_date() -> datetime:
 def make_ids(n: int, prefix: str) -> list[str]:
     """Generate sequential IDs with zero-padded integers."""
     return [f"{prefix}{i:07d}" for i in range(1, n + 1)]
+
+
+def make_ids_with_duplicates(
+    source_ids: Sequence[str],
+    n: int,
+    none_rate: float = 0.0,
+) -> list[str | None]:
+    """Produce a list of length n by sampling from source_ids with replacement.
+
+    With probability `none_rate` each slot will be None instead of an ID.
+    """
+    out: list[str | None] = []
+    for _ in range(n):
+        if none_rate > 0 and random.random() < none_rate:
+            out.append(None)
+        else:
+            out.append(random.choice(source_ids))
+    return out
+
+
+T = TypeVar("T")
+
+
+def weighted_sample(population: Sequence[T], weights: Sequence[float], n: int = 1) -> list[T]:
+    """Return n samples from population with the given weights.
+
+    Each pick is independent and with replacement.
+    """
+    return random.choices(population, weights=weights, k=n)

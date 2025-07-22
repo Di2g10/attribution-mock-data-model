@@ -35,9 +35,12 @@ class SchemaRegistry:
         """
         objs = {}
 
-        for row in self.cfg.objects.sort(by="generation_order", descending=False).iter_rows(
-            named=True
-        ):
+        # Check if generation_order column exists
+        objects_df = self.cfg.objects
+        if "generation_order" in objects_df.columns:
+            objects_df = objects_df.sort(by="generation_order", descending=False)
+
+        for row in objects_df.iter_rows(named=True):
             if str(row.get("generate?", "yes")).lower().startswith("n"):
                 continue
             name = row["Name"]
