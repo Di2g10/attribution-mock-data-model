@@ -1,9 +1,13 @@
-"""Contains the main code runner for the project."""
+"""Main entry point for the application."""
+
+from src.orchestrator import build
+from pathlib import Path
 
 
 def main() -> None:
-    """Run end to end code."""
-    raise NotImplementedError
+    """Run the application to generate the mock data."""
+    structure_file_path = Path("data", "input", "Low Level Field Detail Design(4).xlsx")
+    build(structure_file_path, overwrite=True)
 
 
 if __name__ == "__main__":

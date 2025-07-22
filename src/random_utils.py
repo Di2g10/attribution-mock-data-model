@@ -1,0 +1,52 @@
+"""Utilities for generating random data."""
+
+from __future__ import annotations
+
+import random
+from datetime import datetime, timedelta
+
+from numpy.random import Generator, default_rng
+from faker import Faker
+
+__all__ = [
+    "fake",
+    "make_ids",
+    "random_date",
+    "seed_everything",
+]
+
+# Module-level Faker instance and NumPy Generator
+fake = Faker("en_GB")
+_rng: Generator = default_rng(42)
+
+# ------------------------------------------------------------------
+START_DT = datetime(2024, 1, 1)
+END_DT = datetime(2025, 6, 30)
+_DATE_RANGE_DAYS = (END_DT - START_DT).days
+
+
+def seed_everything(seed: int | None = None) -> None:
+    """Re-seed Python's random, NumPy's Generator, and Faker to make all randomness reproducible."""
+    global _rng  # noqa: PLW0603
+    seed = seed if seed is not None else 42
+
+    # Python stdlib
+    random.seed(seed)
+
+    # NumPy's new Generator
+    _rng = default_rng(seed)
+
+    # Faker
+    fake.seed_instance(seed)
+
+
+def random_date() -> datetime:
+    """Return a random datetime within the global range, using the new RNG."""
+    days = int(_rng.integers(0, _DATE_RANGE_DAYS + 1))
+    secs = int(_rng.integers(0, 86_400))
+    return START_DT + timedelta(days=days, seconds=secs)
+
+
+def make_ids(n: int, prefix: str) -> list[str]:
+    """Generate sequential IDs with zero-padded integers."""
+    return [f"{prefix}{i:07d}" for i in range(1, n + 1)]
