@@ -54,6 +54,109 @@ CAMPAIGN_STATUS_WEIGHTS = [
     0.05,  # Cancelled
 ]
 
+# BT products with weights
+BT_PRODUCTS = [
+    "BTnet",
+    "BT Cloud",
+    "BT Mobile",
+    "BT Broadband",
+    "BT Business",
+    "BT Enterprise",
+    "BT Wholesale",
+    "BT Security",
+    "BT Global",
+    "BT Fibre",
+    "BT Connect",
+    "BT One",
+]
+
+# Weights for BT products (higher weight = more common)
+BT_PRODUCT_WEIGHTS = [
+    0.15,  # BTnet
+    0.15,  # BT Cloud
+    0.15,  # BT Mobile
+    0.15,  # BT Broadband
+    0.10,  # BT Business
+    0.10,  # BT Enterprise
+    0.05,  # BT Wholesale
+    0.05,  # BT Security
+    0.05,  # BT Global
+    0.02,  # BT Fibre
+    0.02,  # BT Connect
+    0.01,  # BT One
+]
+
+# Campaign situations with weights
+CAMPAIGN_SITUATIONS = [
+    "acquisition",
+    "retention",
+    "upsell",
+    "cross-sell",
+    "awareness",
+    "launch",
+    "promotion",
+    "reactivation",
+    "loyalty",
+    "winback",
+]
+
+# Weights for campaign situations (higher weight = more common)
+CAMPAIGN_SITUATION_WEIGHTS = [
+    0.20,  # acquisition
+    0.20,  # retention
+    0.15,  # upsell
+    0.15,  # cross-sell
+    0.10,  # awareness
+    0.05,  # launch
+    0.05,  # promotion
+    0.05,  # reactivation
+    0.03,  # loyalty
+    0.02,  # winback
+]
+
+# Campaign years (recent years are more common)
+CAMPAIGN_YEARS = ["2020", "2021", "2022", "2023", "2024"]
+CAMPAIGN_YEAR_WEIGHTS = [0.05, 0.10, 0.20, 0.30, 0.35]
+
+OBJECTIVE = [
+    "Welcome",
+    "Acquisition",
+    "Upsell",
+    "Cross-sell",
+    "Retention",
+    "In-Life",
+    "Service",
+    "Migration",
+    "Out of Contract",
+]
+OBJECTIVE_WEIGHTS = [0.20, 0.05, 0.05, 0.15, 0.05, 0.10, 0.10, 0.10, 0.10]
+
+# DMO owners
+DMO_OWNERS = [
+    "Abilash Jai",
+    "Baskaran Amit",
+    "Kumar Arushi",
+    "Nanda Boglarka Erdei",
+    "Curt Goff",
+    "Dan Mullins",
+    "Deepak Kumar",
+    "Dominique Mahon",
+    "Heran Patel",
+    "Jim Flack",
+    "Jordan Lewis",
+    "Leigh-Anne Sainthouse",
+    "Matt Berry",
+    "Matt Perry",
+    "Muskan Kaur",
+    "No Owner",
+    "Rebecca Wilson",
+    "Sanjay Patel",
+    "Shruti Bhola",
+    "Sourabh Gupta",
+    "Swati Rautela",
+    "Victor Oppong",
+]
+
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of campaign data."""
@@ -79,31 +182,42 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         duration = timedelta(days=fake.random_int(min=30, max=180))
         end_dates.append(start_date + duration)
 
+    # Generate BT products, situations, and years for campaign names
+    bt_products = weighted_sample(BT_PRODUCTS, BT_PRODUCT_WEIGHTS, n)
+    situations = weighted_sample(CAMPAIGN_SITUATIONS, CAMPAIGN_SITUATION_WEIGHTS, n)
+    years = weighted_sample(CAMPAIGN_YEARS, CAMPAIGN_YEAR_WEIGHTS, n)
+
+    # Generate campaign names in the format "BT product situation year"
+    campaign_names = [
+        f"{product} {situation} {year}"
+        for product, situation, year in zip(bt_products, situations, years)
+    ]
+
     # Generate campaign data
     df = pl.DataFrame(
         {
             "campaign_id": ids,
-            "campaign_name": [f"{fake.company()} {fake.word().capitalize()} Campaign" for _ in ids],
+            "campaign_name": campaign_names,
             "start_date": start_dates,
             "end_date": end_dates,
             "created_date": [random_date() for _ in ids],
             # Fields required by the spreadsheet
-            "objective": [fake.sentence() for _ in ids],
+            "objective": weighted_sample(OBJECTIVE, OBJECTIVE_WEIGHTS, n),
             "outcome_targets": [fake.text(max_nb_chars=50) for _ in ids],
             "costs_actuals": [fake.random_int(min=1000, max=400000) for _ in ids],
             "costs_anticipated": [fake.random_int(min=5000, max=500000) for _ in ids],
-            "brand": [fake.company() for _ in ids],
+            "brand": ["BT" for _ in ids],  # Set brand to BT since we're using BT products
             "budget_timeframe": weighted_sample(
                 ["Monthly", "Quarterly", "Annual", "One-time"], [0.3, 0.3, 0.3, 0.1], n
             ),
-            "dmo_owner": [fake.name() for _ in ids],
+            "dmo_owner": weighted_sample(DMO_OWNERS, n=n),
             "partner": [
                 fake.company() if fake.random.random() < PARTNER_PROBABILITY else None for _ in ids
             ],
-            "product_family": [fake.word().capitalize() for _ in ids],
+            "product_family": bt_products,  # Use the same BT products for product_family
             "business_unit": weighted_sample(
-                ["Marketing", "Sales", "Product", "Support", "Operations"],
-                [0.3, 0.3, 0.2, 0.1, 0.1],
+                ["SMB", "CPS", "Global", "Wholesale"],
+                [0.5, 0.3, 0.1, 0.1],
                 n,
             ),
             "targeted_audience_id": [f"AUD{fake.random_int(min=1000, max=9999)}" for _ in ids],

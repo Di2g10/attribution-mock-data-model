@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timedelta
-from typing import Sequence, TypeVar
+from typing import Sequence, TypeVar, Optional
 
 from numpy.random import Generator, default_rng
 from faker import Faker
@@ -74,9 +74,15 @@ def make_ids_with_duplicates(
 T = TypeVar("T")
 
 
-def weighted_sample(population: Sequence[T], weights: Sequence[float], n: int = 1) -> list[T]:
+def weighted_sample(
+    population: Sequence[T], weights: Optional[Sequence[float]] = None, n: int = 1
+) -> list[T]:
     """Return n samples from population with the given weights.
 
     Each pick is independent and with replacement.
+    If weights are not provided, uniform weights will be used.
     """
+    if weights is None:
+        # Create uniform weights if none provided
+        weights = [1.0] * len(population)
     return random.choices(population, weights=weights, k=n)
