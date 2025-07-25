@@ -157,6 +157,108 @@ DMO_OWNERS = [
     "Victor Oppong",
 ]
 
+# BT Marketing Partners
+BT_PARTNERS = [
+    "Google",
+    "Microsoft",
+    "Cisco",
+    "Vodafone",
+    "EE",
+    "Amazon Web Services",
+    "Oracle",
+    "IBM",
+    "Salesforce",
+    "Adobe",
+    "Dell Technologies",
+    "HPE",
+    "SAP",
+    "Ericsson",
+    "Nokia",
+    "Huawei",
+    "Accenture",
+    "Deloitte Digital",
+    "PwC Digital",
+    "KPMG Digital",
+    "Fujitsu",
+    "Intel",
+    "Apple",
+    "Samsung",
+    "LinkedIn",
+    "Twitter",
+    "Facebook",
+    "Instagram",
+    "TikTok",
+    "YouTube",
+    "Spotify",
+    "Xero",
+    "BBC",
+    "Sky",
+    "Channel 4",
+    "ITV",
+    "The Telegraph",
+    "The Guardian",
+    "Financial Times",
+    "Wunderman Thompson",
+    "Ogilvy",
+    "Saatchi & Saatchi",
+    "McCann",
+    "WPP",
+    "Publicis Groupe",
+    "Omnicom Group",
+    "IPG Mediabrands",
+]
+
+# Weights for partners (technology partners have higher weights)
+BT_PARTNER_WEIGHTS = [
+    0.06,  # Google
+    0.06,  # Microsoft
+    0.06,  # Cisco
+    0.05,  # Vodafone
+    0.05,  # EE
+    0.05,  # Amazon Web Services
+    0.04,  # Oracle
+    0.04,  # IBM
+    0.04,  # Salesforce
+    0.03,  # Adobe
+    0.03,  # Dell Technologies
+    0.03,  # HPE
+    0.03,  # SAP
+    0.03,  # Ericsson
+    0.03,  # Nokia
+    0.02,  # Huawei
+    0.02,  # Accenture
+    0.02,  # Deloitte Digital
+    0.02,  # PwC Digital
+    0.02,  # KPMG Digital
+    0.02,  # Fujitsu
+    0.02,  # Intel
+    0.02,  # Apple
+    0.02,  # Samsung
+    0.01,  # LinkedIn
+    0.01,  # Twitter
+    0.01,  # Facebook
+    0.01,  # Instagram
+    0.01,  # TikTok
+    0.01,  # YouTube
+    0.01,  # Spotify
+    0.01,  # Xero
+    0.01,  # BBC
+    0.01,  # Sky
+    0.01,  # Channel 4
+    0.01,  # ITV
+    0.01,  # The Telegraph
+    0.01,  # The Guardian
+    0.01,  # Financial Times
+    0.01,  # Wunderman Thompson
+    0.01,  # Ogilvy
+    0.01,  # Saatchi & Saatchi
+    0.01,  # McCann
+    0.01,  # WPP
+    0.01,  # Publicis Groupe
+    0.01,  # Omnicom Group
+    0.01,  # IPG Mediabrands
+]
+
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of campaign data."""
@@ -212,7 +314,12 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             ),
             "dmo_owner": weighted_sample(DMO_OWNERS, n=n),
             "partner": [
-                fake.company() if fake.random.random() < PARTNER_PROBABILITY else None for _ in ids
+                (
+                    weighted_sample(BT_PARTNERS, BT_PARTNER_WEIGHTS, 1)[0]
+                    if fake.random.random() < PARTNER_PROBABILITY
+                    else None
+                )
+                for _ in ids
             ],
             "product_family": bt_products,  # Use the same BT products for product_family
             "business_unit": weighted_sample(
