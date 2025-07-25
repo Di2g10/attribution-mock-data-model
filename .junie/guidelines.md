@@ -9,6 +9,7 @@ This document provides specific guidelines for Junie, the AI agent, to ensure ge
 - Follow client project structure conventions: new functionality belongs in the correct package/module, matching the existing pattern.
 - Never introduce external package managers or install methods other than Poetry. Use `poetry add {package}` when dependencies must be mentioned.
 - Preserve existing public APIs; avoid breaking changes unless explicitly instructed.
+- All Code Generated should be checked and pass all pre-commit checks.
 
 ## Project Structure
 
@@ -27,7 +28,7 @@ This document provides specific guidelines for Junie, the AI agent, to ensure ge
 - Write code in British English spelling conventions.
 - Generate a Sphinx-style docstring using :param:, :raises: and :returns: directives.
 - Include type hints for all public functions and classes.
-- Keep functions small with less than 50 lines and maintain low branching complexity.
+- Keep functions small with less than 50 lines and maintain low branching complexity <3 branches.
 - Avoid complex nested logic; prefer simple, testable units.
 - Access nested module functions through the respective `__init__.py` exports, when appropriate.
 - Inline error handling with clear exception messages aligned with project patterns.
