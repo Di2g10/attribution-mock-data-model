@@ -257,11 +257,13 @@ CESSATION_REASON_WEIGHTS = [
 ]
 
 
-def _extract_prior_data(prior: Dict[str, Any]) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Extract company, person, and interaction data from prior data.
+def _extract_prior_data(
+    prior: Dict[str, Any],
+) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Extract company, person, interaction, and person-company role data from prior data.
 
     :param prior: Dictionary of prior generated data
-    :returns: Tuple of (company_df, person_df, interaction_df)
+    :returns: Tuple of (company_df, person_df, interaction_df, person_company_role_df)
     """
     # Extract company data if available
     company_df = prior.get("Company")
@@ -272,7 +274,10 @@ def _extract_prior_data(prior: Dict[str, Any]) -> Tuple[pl.DataFrame, pl.DataFra
     # Extract interaction data if available
     interaction_df = prior.get("Interactions")
 
-    return company_df, person_df, interaction_df
+    # Extract person-company role data if available
+    person_company_role_df = prior.get("PersonCompanyRole")
+
+    return company_df, person_df, interaction_df, person_company_role_df
 
 
 def _generate_basic_order_data(
@@ -301,38 +306,54 @@ def _generate_basic_order_data(
     return ids, order_dates, delivery_dates, order_amounts
 
 
-def _create_company_person_relationships(
-    company_df: Optional[pl.DataFrame], person_df: Optional[pl.DataFrame], ids: List[str]
-) -> Tuple[List[str], List[str], Dict[str, List[str]], List[str], List[str]]:
-    """Create company-person relationships and assign to orders.
+def _create_company_person_map(
+    company_ids: List[str],
+    person_ids: List[str],
+    person_company_role_df: Optional[pl.DataFrame],
+) -> Dict[str, List[str]]:
+    """Create a mapping of companies to persons.
 
-    :param company_df: DataFrame containing company data
-    :param person_df: DataFrame containing person data
-    :param ids: List of order IDs
-    :returns: Tuple of (company_ids, person_ids, company_person_map, order_companies, order_contacts)
+    :param company_ids: List of company IDs
+    :param person_ids: List of person IDs
+    :param person_company_role_df: DataFrame containing person-company role data
+    :returns: Dictionary mapping company IDs to lists of person IDs
     """
-    # Create mappings for company-person relationships
-    company_person_map = {}
-    company_ids = []
-    person_ids = []
+    company_person_map: Dict[str, List[str]] = {}
 
-    # If we have company data, extract company IDs
-    if company_df is not None and "company_id" in company_df.columns:
-        company_ids = company_df["company_id"].to_list()
+    # First check if we have person-company role data
+    if (
+        person_company_role_df is not None
+        and "person_id" in person_company_role_df.columns
+        and "company_id" in person_company_role_df.columns
+    ):
+        # Use person-company role data to create the mapping
+        for row in person_company_role_df.iter_rows(named=True):
+            person_id = row.get("person_id")
+            company_id = row.get("company_id")
 
-    # If we have person data, extract person IDs
-    if person_df is not None and "person_id" in person_df.columns:
-        person_ids = person_df["person_id"].to_list()
-
-    # Create a mapping of companies to persons if we have both
-    if company_ids and person_ids:
+            if person_id and company_id:
+                if company_id not in company_person_map:
+                    company_person_map[company_id] = []
+                if person_id not in company_person_map[company_id]:
+                    company_person_map[company_id].append(person_id)
+    # If we don't have person-company role data but have both company and person data
+    elif company_ids and person_ids:
         # Assign multiple persons to each company
         for company_id in company_ids:
             # Assign 1-5 random persons to each company
             num_persons = fake.random_int(min=1, max=min(5, len(person_ids)))
             company_person_map[company_id] = fake.random.sample(person_ids, num_persons)
 
-    # Assign companies to orders
+    return company_person_map
+
+
+def _assign_companies_to_orders(company_ids: List[str], ids: List[str]) -> List[str]:
+    """Assign companies to orders.
+
+    :param company_ids: List of company IDs
+    :param ids: List of order IDs
+    :returns: List of company IDs or names assigned to orders
+    """
     order_companies = []
     for _ in ids:
         if company_ids:
@@ -341,8 +362,21 @@ def _create_company_person_relationships(
         else:
             # Generate a fake company name
             order_companies.append(fake.company())
+    return order_companies
 
-    # Assign contacts to orders based on company-person mapping
+
+def _assign_contacts_to_orders(
+    order_companies: List[str],
+    company_person_map: Dict[str, List[str]],
+    person_ids: List[str],
+) -> List[str]:
+    """Assign contacts to orders based on company-person mapping.
+
+    :param order_companies: List of company IDs or names assigned to orders
+    :param company_person_map: Dictionary mapping company IDs to lists of person IDs
+    :param person_ids: List of person IDs
+    :returns: List of person IDs or names assigned to orders
+    """
     order_contacts = []
     for company in order_companies:
         if isinstance(company, str) and not company.startswith("CO"):
@@ -357,6 +391,43 @@ def _create_company_person_relationships(
         else:
             # No person data available, generate a fake contact
             order_contacts.append(fake.name())
+    return order_contacts
+
+
+def _create_company_person_relationships(
+    company_df: Optional[pl.DataFrame],
+    person_df: Optional[pl.DataFrame],
+    person_company_role_df: Optional[pl.DataFrame],
+    ids: List[str],
+) -> Tuple[List[str], List[str], Dict[str, List[str]], List[str], List[str]]:
+    """Create company-person relationships and assign to orders.
+
+    :param company_df: DataFrame containing company data
+    :param person_df: DataFrame containing person data
+    :param person_company_role_df: DataFrame containing person-company role data
+    :param ids: List of order IDs
+    :returns: Tuple of (company_ids, person_ids, company_person_map, order_companies, order_contacts)
+    """
+    # Extract company and person IDs
+    company_ids: List[str] = []
+    person_ids: List[str] = []
+
+    # If we have company data, extract company IDs
+    if company_df is not None and "company_id" in company_df.columns:
+        company_ids = company_df["company_id"].to_list()
+
+    # If we have person data, extract person IDs
+    if person_df is not None and "person_id" in person_df.columns:
+        person_ids = person_df["person_id"].to_list()
+
+    # Create a mapping of companies to persons
+    company_person_map = _create_company_person_map(company_ids, person_ids, person_company_role_df)
+
+    # Assign companies to orders
+    order_companies = _assign_companies_to_orders(company_ids, ids)
+
+    # Assign contacts to orders based on company-person mapping
+    order_contacts = _assign_contacts_to_orders(order_companies, company_person_map, person_ids)
 
     return company_ids, person_ids, company_person_map, order_companies, order_contacts
 
@@ -541,8 +612,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Extract prior data if available
     prior = kwargs.get("prior", {})
 
-    # Extract company, person, and interaction data
-    company_df, person_df, interaction_df = _extract_prior_data(prior)
+    # Extract company, person, interaction, and person-company role data
+    company_df, person_df, interaction_df, person_company_role_df = _extract_prior_data(prior)
 
     # Generate basic order data
     ids, order_dates, delivery_dates, order_amounts = _generate_basic_order_data(n)
@@ -555,7 +626,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # Create company-person relationships and assign to orders
     company_ids, person_ids, company_person_map, order_companies, order_contacts = (
-        _create_company_person_relationships(company_df, person_df, ids)
+        _create_company_person_relationships(company_df, person_df, person_company_role_df, ids)
     )
 
     # Process interaction data for causal interactions
