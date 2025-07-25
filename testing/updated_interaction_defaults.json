@@ -1,0 +1,171 @@
+{
+    "DEFAULT_CHANNEL_INTERACTION_TYPES": {
+        "Paid Digital Ads": [
+            "Viewed",
+            "Clicked",
+            "Submit Form"
+        ],
+        "Content Syndication": [
+            "Viewed",
+            "Clicked",
+            "Submit Form"
+        ],
+        "Web": [
+            "Page View",
+            "Link Click",
+            "Submit Form",
+            "Watch Video",
+            "Download",
+            "Live Chat?"
+        ],
+        "Above the Line - Non Digital": [
+            "Viewed"
+        ],
+        "Social Posts": [
+            "Viewed",
+            "Clicked",
+            "Responded"
+        ],
+        "Social Outbound Messages": [
+            "Viewed",
+            "Clicked",
+            "Responded",
+            "Opt-Out"
+        ],
+        "Virtual Events": [
+            "Registered",
+            "Attended",
+            "View on Demand"
+        ],
+        "F2F Events": [
+            "Registered",
+            "Attended"
+        ],
+        "Webinars": [
+            "Registered",
+            "Attended",
+            "View on Demand"
+        ],
+        "Direct Mail": [
+            "Sent",
+            "Delivered",
+            "Bounced"
+        ],
+        "Whatsapp": [
+            "Sent",
+            "Received",
+            "Read",
+            "Clicked",
+            "Responded",
+            "Opt-Out"
+        ],
+        "RCS": [
+            "Sent",
+            "Received",
+            "Read",
+            "Clicked",
+            "Responded",
+            "Opt-Out"
+        ],
+        "Email": [
+            "Sent",
+            "Received",
+            "Bounced",
+            "Opened",
+            "Clicked",
+            "Opt-Out",
+            "Responded"
+        ],
+        "SMS": [
+            "Sent",
+            "Received",
+            "Bounced",
+            "Clicked",
+            "Responsed",
+            "Opt-Out"
+        ],
+        "MMS": [
+            "Sent",
+            "Received",
+            "Bounced",
+            "Clicked",
+            "Responsed",
+            "Opt-Out"
+        ],
+        "App Push Notification": [
+            "Sent",
+            "Received",
+            "Clicked"
+        ],
+        "Sales Meetings": [
+            "Invited",
+            "Attended"
+        ],
+        "Sales Calls": [
+            "Dialled",
+            "Answered",
+            "Engaged"
+        ],
+        "Sales Email": [
+            "Sent",
+            "Received",
+            "Bounced",
+            "Opened",
+            "Clicked",
+            "Opt-Out",
+            "Responded"
+        ],
+        "Inbound Calls": [
+            "Called"
+        ],
+        "Phone": [
+            "Phone Call"
+        ],
+        "In Person": [
+            "Meeting",
+            "Demo",
+            "Training",
+            "Consultation"
+        ],
+        "Chat": [
+            "Chat"
+        ],
+        "Social Media": [
+            "Social Media"
+        ],
+        "Video": [
+            "Video Call"
+        ],
+        "Support": [
+            "Support Ticket"
+        ]
+    },
+    "DEFAULT_CHANNEL_WEIGHTS": {
+        "Paid Digital Ads": 0.04,
+        "Content Syndication": 0.04,
+        "Web": 0.04,
+        "Above the Line - Non Digital": 0.04,
+        "Social Posts": 0.04,
+        "Social Outbound Messages": 0.04,
+        "Virtual Events": 0.04,
+        "F2F Events": 0.04,
+        "Webinars": 0.04,
+        "Direct Mail": 0.04,
+        "Whatsapp": 0.04,
+        "RCS": 0.04,
+        "Email": 0.3,
+        "SMS": 0.04,
+        "MMS": 0.04,
+        "App Push Notification": 0.04,
+        "Sales Meetings": 0.04,
+        "Sales Calls": 0.04,
+        "Sales Email": 0.04,
+        "Inbound Calls": 0.04,
+        "Phone": 0.25,
+        "In Person": 0.15,
+        "Chat": 0.1,
+        "Social Media": 0.05,
+        "Video": 0.05,
+        "Support": 0.1
+    }
+}
