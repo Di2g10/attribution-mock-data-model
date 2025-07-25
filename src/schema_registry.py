@@ -15,6 +15,7 @@ class SchemaRegistry:
     _DEFAULT_ORDER: ClassVar[list[str]] = [
         "Company",
         "Person",
+        "Person Company Role",
         "Campaigns",
         "Push Activity",
         "Pull Activity",
@@ -41,13 +42,12 @@ class SchemaRegistry:
             objects_df = objects_df.sort(by="generation_order", descending=False)
 
         for row in objects_df.iter_rows(named=True):
-            if str(row.get("generate?", "yes")).lower().startswith("n"):
-                continue
             name = row["Name"]
-            objs[name] = {
-                "row_count": int(row.get("row_count", 0) or 100),
-                "meta": row,
-            }
+            if str(row.get("generate?", "yes")).lower().startswith("y"):
+                objs[name] = {
+                    "row_count": int(row.get("row_count", 0) or 100),
+                    "meta": row,
+                }
         return objs
 
     # ------------------------------------------------------------------
