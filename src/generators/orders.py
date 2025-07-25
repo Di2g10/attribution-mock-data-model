@@ -574,7 +574,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
                     data.ids, data.order_dates, data.order_companies
                 )
             ],
-            "related_opportunity": [
+            "related_opportunity_id": [
                 (
                     # Placeholder for related_opportunity
                     # This would reference an opportunity table that doesn't exist yet
@@ -584,7 +584,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
                 )
                 for _ in data.ids
             ],
-            "causal_interaction": [
+            "causal_interaction_id": [
                 (
                     # Find an interaction from the same company
                     # that happens before but close to the order date

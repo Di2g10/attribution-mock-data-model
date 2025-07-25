@@ -11,7 +11,11 @@ from src.orchestrator import build
 
 
 def normalize_field_name(name: str) -> str:
-    """Normalize a field name by converting to lowercase and removing spaces and underscores."""
+    """Normalize a field name by converting to lowercase and removing spaces and underscores.
+
+    This ensures that field names like 'causal_interaction' and 'causalinteractionid'
+    are treated as equivalent.
+    """
     return name.lower().replace(" ", "").replace("_", "")
 
 
@@ -28,9 +32,9 @@ def get_expected_fields_from_spreadsheet(excel_file_path: Path) -> dict[str, set
     # Load the Attributes sheet
     attributes_df = pd.read_excel(excel_file_path, "Attributes")
 
-    # Group by object name (in the 'Orders' column) and collect field names
+    # Group by object name (in the 'Object' column) and collect field names
     expected_fields = {}
-    for obj_name, group in attributes_df.groupby("Orders"):
+    for obj_name, group in attributes_df.groupby("Object"):
         # Skip non-object entries
         if pd.isna(obj_name) or obj_name == "":
             continue

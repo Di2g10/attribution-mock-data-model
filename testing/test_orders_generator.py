@@ -232,15 +232,15 @@ class TestOrderRelationships(unittest.TestCase):
         }
 
         # Get all causal interactions that are not None
-        causal_orders = self.orders_df.select(["id", "causal_interaction", "date_raised"]).filter(
-            pl.col("causal_interaction").is_not_null()
-        )
+        causal_orders = self.orders_df.select(
+            ["id", "causal_interaction_id", "date_raised"]
+        ).filter(pl.col("causal_interaction_id").is_not_null())
 
         # If there are any causal interactions, check date consistency
         if causal_orders.height > 0:
             for row in causal_orders.iter_rows(named=True):
                 current_order_id = row.get("id")
-                causal_interaction_id = row.get("causal_interaction")
+                causal_interaction_id = row.get("causal_interaction_id")
                 order_date = row.get("date_raised")
 
                 # If the causal interaction ID is in our generated interactions
