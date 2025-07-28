@@ -504,7 +504,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
         {
             "id": data.ids,
             "name": [f"Order {i}" for i in data.ids],
-            "company": data.order_companies,
+            "company_id": data.order_companies,
             "product": [fake.bs() for _ in data.ids],
             "product_family": weighted_sample(
                 ["Hardware", "Software", "Services", "Consulting", "Support"],

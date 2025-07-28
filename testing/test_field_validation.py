@@ -2,6 +2,7 @@
 
 import unittest
 from pathlib import Path
+from typing import List
 
 import pandas as pd
 
@@ -95,6 +96,9 @@ class TestFieldValidation(unittest.TestCase):
         # Generate data for all objects
         generated_data = build(self.structure_file_path, overwrite=True)
 
+        # Track errors for all objects
+        error_messages: List[str] = []
+
         # Check each object
         for obj_name, df in generated_data.items():
             # Skip if object is not in expected fields
@@ -111,12 +115,16 @@ class TestFieldValidation(unittest.TestCase):
             # Check for missing fields
             missing_fields = expected_fields - actual_fields
             if missing_fields:
-                self.fail(f"Object '{obj_name}' is missing fields: {missing_fields}")
+                error_messages.append(f"Object '{obj_name}' is missing fields: {missing_fields}")
 
             # Check for extra fields
             extra_fields = actual_fields - expected_fields
             if extra_fields:
-                self.fail(f"Object '{obj_name}' has extra fields: {extra_fields}")
+                error_messages.append(f"Object '{obj_name}' has extra fields: {extra_fields}")
+
+            if error_messages:
+                all_errors = "\n".join(error_messages)
+                self.fail(f"Field validation failed:\n{all_errors}")
 
             # If we get here, all fields match
             print(f"Object '{obj_name}' fields match spreadsheet")

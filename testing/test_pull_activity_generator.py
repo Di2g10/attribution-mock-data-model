@@ -1,51 +1,80 @@
-"""Tests for the pull activity generator module."""
+"""Unit tests for the Pull Activity generator."""
 
-from src.generators.pull_activity import generate
+from __future__ import annotations
 
-# Constants for test sample sizes
-LARGE_SAMPLE_SIZE = 20
-SMALL_SAMPLE_SIZE = 10
-TINY_SAMPLE_SIZE = 5
+import unittest
+from typing import Dict
 
+import polars as pl
 
-def test_pull_activity_unique_ids() -> None:
-    """Test that generated pull activity IDs are unique."""
-    df = generate(LARGE_SAMPLE_SIZE)
-    ids = df.select("id").to_series()
-    assert ids.is_unique().all(), "id values should be unique"
-    assert df.height == LARGE_SAMPLE_SIZE
+from src.generators.pull_activity import generate as generate_pull_activity
+from src.generators.marketing_assets import generate as generate_marketing_assets
+
+# Sample sizes used across tests
+LARGE_SAMPLE_SIZE: int = 20
 
 
-def test_pull_activity_with_related_objects() -> None:
-    """Test pull activity generation with related objects."""
-    # Create mock DataFrames for related objects
-    import polars as pl
+class TestPullActivityGenerator(unittest.TestCase):
+    """Tests for the Pull Activity generator using the unittest framework."""
 
-    company_df = pl.DataFrame(
-        {
-            "company_id": ["CO0000001", "CO0000002", "CO0000003"],
-            "company_name": ["Company A", "Company B", "Company C"],
+    def setUp(self) -> None:
+        """Create a minimal valid `prior` for Pull Activity generation.
+
+        Pull Activity requires Marketing Assets, and Marketing Assets requires Products.
+        We therefore create Products first and pass them to the marketing assets generator.
+        """
+        self.products_df = pl.DataFrame(
+            {
+                "product_id": [f"PROD{str(i).zfill(7)}" for i in range(1, LARGE_SAMPLE_SIZE + 1)],
+                "name": [f"Product {i}" for i in range(1, LARGE_SAMPLE_SIZE + 1)],
+            }
+        )
+
+        self.marketing_assets_df = generate_marketing_assets(
+            LARGE_SAMPLE_SIZE,
+            prior={"Products": self.products_df},
+        )
+
+        # Only the title-cased keys are required by the generator.
+        self.prior: Dict[str, pl.DataFrame] = {
+            "Products": self.products_df,
+            "Marketing Assets": self.marketing_assets_df,
         }
-    )
 
-    campaign_df = pl.DataFrame(
-        {"campaign_id": ["CAM0000001", "CAM0000002"], "campaign_name": ["Campaign A", "Campaign B"]}
-    )
+    def test_pull_activity_unique_ids(self) -> None:
+        """Ensure generated Pull Activity IDs are unique and the row count matches.
 
-    person_df = pl.DataFrame(
-        {
-            "person_id": ["PER0000001", "PER0000002", "PER0000003", "PER0000004"],
-            "first_name": ["John", "Jane", "Bob", "Alice"],
-        }
-    )
+        :raises AssertionError: If IDs are not unique or row count mismatches.
+        """
+        df = generate_pull_activity(LARGE_SAMPLE_SIZE, prior=self.prior)
 
-    # Generate pull activities with related data
-    df = generate(
-        SMALL_SAMPLE_SIZE,
-        prior={"Company": company_df, "Campaigns": campaign_df, "Person": person_df},
-    )
+        self.assertIn("id", df.columns, "Expected 'id' column in Pull Activity output.")
+        ids = df.select("id").to_series()
+        self.assertTrue(ids.is_unique().all(), "Pull Activity 'id' values should be unique.")
+        self.assertEqual(df.height, LARGE_SAMPLE_SIZE, "Row count should match the requested size.")
 
-    # Just verify that the generation works with related data
-    # We no longer include company_id, campaign_id, or person_id fields as per the spreadsheet
-    assert df.height == SMALL_SAMPLE_SIZE
-    assert "id" in df.columns
+    def test_pull_activity_marketing_asset_links(self) -> None:
+        """Verify that all `marketing_asset_id` values exist in the Marketing Assets table.
+
+        :raises AssertionError: If the output lacks the column or references unknown IDs.
+        """
+        df = generate_pull_activity(LARGE_SAMPLE_SIZE, prior=self.prior)
+
+        self.assertIn(
+            "marketing_asset_id",
+            df.columns,
+            f"Expected 'marketing_asset_id' column; got: {df.columns}",
+        )
+
+        valid_ma_ids = set(self.marketing_assets_df["marketing_asset_id"].to_list())
+        used_ma_ids = set(df["marketing_asset_id"].drop_nulls().to_list())
+
+        unknown = used_ma_ids - valid_ma_ids
+        self.assertFalse(
+            unknown,
+            f"Pull Activity references unknown marketing assets: {sorted(unknown)}",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

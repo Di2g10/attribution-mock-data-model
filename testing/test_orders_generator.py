@@ -11,6 +11,9 @@ from src.generators.company import generate as generate_company
 from src.generators.person import generate as generate_person
 from src.generators.interactions import generate as generate_interactions
 from src.generators.person_company_role import generate as generate_person_company_role
+from src.generators.marketing_assets import generate as generate_marketing_assets
+from src.generators.push_activity import generate as generate_push_activity
+from src.generators.pull_activity import generate as generate_pull_activity
 
 # Constants for test sample sizes
 LARGE_SAMPLE_SIZE = 20
@@ -95,10 +98,53 @@ class TestOrderRelationships(unittest.TestCase):
         self.person_df = generate_person(SMALL_SAMPLE_SIZE)
         self.products_df = generate_products(SMALL_SAMPLE_SIZE)
 
+        # Marketing Assets needs Products in prior
+        self.marketing_assets_df = generate_marketing_assets(
+            SMALL_SAMPLE_SIZE,
+            prior={"Products": self.products_df},
+        )
+
+        self.campaigns_df = pl.DataFrame(
+            {
+                "campaign_id": [f"CAM{str(i).zfill(7)}" for i in range(1, SMALL_SAMPLE_SIZE + 1)],
+                "name": [f"Campaign {i}" for i in range(1, SMALL_SAMPLE_SIZE + 1)],
+            }
+        )
+        # Minimal Audience (push_activity expects audience_id)
+        self.audience_df = pl.DataFrame(
+            {
+                "audience_id": [f"AUD{str(i).zfill(7)}" for i in range(1, SMALL_SAMPLE_SIZE + 1)],
+                "name": [f"Audience {i}" for i in range(1, SMALL_SAMPLE_SIZE + 1)],
+            }
+        )
+        # Generate real Push Activities that target people/companies from the prior
+        # Some older generators look up lowercase keys; provide both to be safe.
+        push_prior = {
+            "Marketing Assets": self.marketing_assets_df,
+            "Campaigns": self.campaigns_df,
+            "Company": self.company_df,
+            "Person": self.person_df,
+            "company": self.company_df,
+            "person": self.person_df,
+            "Audience": self.audience_df,
+            "audience": self.audience_df,
+        }
+
+        # Use a slightly larger pool than interactions to reduce heavy reuse in tiny samples
+        self.push_activity_df = generate_push_activity(SMALL_SAMPLE_SIZE * 2, prior=push_prior)
+        self.pull_activity_df = generate_pull_activity(SMALL_SAMPLE_SIZE, prior=push_prior)
+
+        prior_for_interactions = {
+            "Company": self.company_df,
+            "Person": self.person_df,
+            "Push Activity": self.push_activity_df,
+            "Pull Activity": self.pull_activity_df,
+        }
+
         # Generate interactions with company and person data
         self.interactions_df = generate_interactions(
             SMALL_SAMPLE_SIZE,
-            prior={"Company": self.company_df, "Person": self.person_df},
+            prior=prior_for_interactions,
             keep_channel=True,
         )
 
@@ -151,12 +197,12 @@ class TestOrderRelationships(unittest.TestCase):
 
         # If we have interaction data, use it to build company-person relationships
         if (
-            "companyinteracted" in self.interactions_df.columns
-            and "personinteracted" in self.interactions_df.columns
+            "interacted_company_id" in self.interactions_df.columns
+            and "interacted_person_id" in self.interactions_df.columns
         ):
             for row in self.interactions_df.iter_rows(named=True):
-                company = row.get("companyinteracted")
-                person = row.get("personinteracted")
+                company = row.get("interacted_company_id")
+                person = row.get("interacted_person_id")
 
                 if company and person:
                     if company not in company_person_map:
@@ -164,8 +210,8 @@ class TestOrderRelationships(unittest.TestCase):
                     company_person_map[company].add(person)
 
         # Get orders with both company and contact
-        orders_with_both = self.orders_df.select(["id", "company", "contact_id"]).filter(
-            (pl.col("company").is_not_null()) & (pl.col("contact_id").is_not_null())
+        orders_with_both = self.orders_df.select(["id", "company_id", "contact_id"]).filter(
+            (pl.col("company_id").is_not_null()) & (pl.col("contact_id").is_not_null())
         )
 
         # If there are any orders with both company and contact, and we have company-person relationships
@@ -279,8 +325,8 @@ class TestOrderRelationships(unittest.TestCase):
                     person_company_map[person_id].add(company_id)
 
         # Get orders with both company and contact
-        orders_with_both = self.orders_df.select(["id", "company", "contact_id"]).filter(
-            (pl.col("company").is_not_null()) & (pl.col("contact_id").is_not_null())
+        orders_with_both = self.orders_df.select(["id", "company_id", "contact_id"]).filter(
+            (pl.col("company_id").is_not_null()) & (pl.col("contact_id").is_not_null())
         )
 
         # If there are any orders with both company and contact, and we have person-company relationships

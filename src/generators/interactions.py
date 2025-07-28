@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import polars as pl
 
@@ -369,9 +369,9 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
                 [0.3, 0.2, 0.2, 0.2, 0.1],
                 data.n,
             ),
-            "personinteracted": person_interacted,
-            "activity": activity,
-            "companyinteracted": company_interacted,
+            "interacted Person ID": person_interacted,
+            "interacted Company ID": company_interacted,
+            "activity_id": activity,
             "date": data.interaction_dates,
             "duration": data.durations,
             "followfrominteraction": followfrom_interactions,
@@ -380,75 +380,115 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
-    """Generate a DataFrame of interaction data.
+    """Generate a high-performance DataFrame of interaction data using vectorised logic.
 
-    :param n: Number of interactions to generate
-    :param kwargs: Additional keyword arguments
-        - registry: SchemaRegistry object containing channel and interaction type data
-        - keep_channel: Whether to keep the channel field in the output DataFrame
-        - prior: Dictionary of previously generated DataFrames
-    :returns: DataFrame containing generated interaction data
+    :param n: Number of rows to generate
+    :param kwargs: Supports `prior`, `registry`, `keep_channel`
+    :raises ValueError: If required activity or relationship data is missing
+    :returns: Polars DataFrame with interaction data
     """
-    # Extract registry if available
+    prior = kwargs.get("prior", {})
     registry = kwargs.get("registry")
 
-    # Extract prior data if available
-    prior = kwargs.get("prior", {})
+    # --- 1. Gather activities from Push and Pull sources ---
+    activity_frames = []
+    for key in ("Push Activity", "Pull Activity"):
+        df = prior.get(key)
+        if df is not None and {"id", "targeted_person_id", "targeted_company_id"}.issubset(
+            df.columns
+        ):
+            activity_frames.append(
+                df.select(
+                    [
+                        pl.col("id").alias("activity_id"),
+                        pl.col("targeted_person_id").alias("interacted_person_id"),
+                        pl.col("targeted_company_id").alias("interacted_company_id"),
+                    ]
+                )
+            )
 
-    # Extract company, person, and activity IDs from prior data
-    company_ids = []
-    person_ids = []
-    activity_ids = []
+    if not activity_frames:
+        raise ValueError("No activity data with valid person/company references found.")
 
-    # Extract company IDs if available
-    company_df = prior.get("Company", None)
-    if company_df is not None and "company_id" in company_df.columns:
-        company_ids = company_df["company_id"].to_list()
+    activities_df = pl.concat(activity_frames)
 
-    # Extract person IDs if available
-    person_df = prior.get("Person", None)
-    if person_df is not None and "person_id" in person_df.columns:
-        person_ids = person_df["person_id"].to_list()
+    # --- 2. Validate against Person Company Role if available ---
+    valid_roles = None
+    role_df = prior.get("Person Company Role")
+    if role_df is not None and {"Person ID", "Company ID"}.issubset(role_df.columns):
+        valid_roles = role_df.select(
+            [
+                pl.col("Person ID").alias("interacted_person_id"),
+                pl.col("Company ID").alias("interacted_company_id"),
+            ]
+        ).unique()
 
-    # Extract activity IDs from both pull and push activities if available
-    pull_activity_df = prior.get("Pull Activity", None)
-    if pull_activity_df is not None and "id" in pull_activity_df.columns:
-        activity_ids.extend(pull_activity_df["id"].to_list())
+        activities_df = activities_df.join(
+            valid_roles, on=["interacted_person_id", "interacted_company_id"], how="inner"
+        )
 
-    push_activity_df = prior.get("Push Activity", None)
-    if push_activity_df is not None and "id" in push_activity_df.columns:
-        activity_ids.extend(push_activity_df["id"].to_list())
-
-    # Generate basic interaction data
-    ids, interaction_dates, durations = generate_basic_data(n)
-
-    # Get channels and interaction types from registry
-    channel_interaction_types, channel_weights = get_channel_data_from_registry(registry)
-
-    # Generate channels for each interaction
-    channels = generate_channels(n, channel_weights)
-
-    # Generate interaction types appropriate for each channel
-    interaction_types = generate_interaction_types(channels, channel_interaction_types)
-
-    # Create a data container for all parameters
-    data = InteractionData(
-        n=n,
-        ids=ids,
-        interaction_dates=interaction_dates,
-        durations=durations,
-        channels=channels,
-        interaction_types=interaction_types,
-        company_ids=company_ids,
-        person_ids=person_ids,
-        activity_ids=activity_ids,
+    # --- 3. Sample activities for interaction base ---
+    interaction_ids = make_ids(n, "INT")
+    sampled_df = activities_df.sample(n=n, with_replacement=True).with_columns(
+        [
+            pl.Series("interactionid", interaction_ids),
+            pl.Series("date", [random_date() for _ in range(n)]),
+            pl.Series("duration", [fake.random_int(1, 120) for _ in range(n)]),
+        ]
     )
 
-    # Create a DataFrame with all fields
-    df = create_interactions_dataframe(data)
+    # --- 4. Assign followfrominteraction with memory-efficient tracking ---
+    followfrom: list[str | None] = [None] * n
+    last_seen_by_person: dict[str, str] = {}
+    follow_on_likelihood = 0.2
+    for i in range(n):
+        raw_person = sampled_df[i, "interacted_person_id"]
+        person: Optional[str] = raw_person if isinstance(raw_person, str) else None
+        if (
+            person is not None
+            and fake.random.random() < follow_on_likelihood
+            and person in last_seen_by_person
+        ):
+            followfrom[i] = last_seen_by_person[person]
+        if person is not None:
+            last_seen_by_person[person] = sampled_df[i, "interactionid"]
 
-    # Remove the channel field from the output DataFrame to match the spreadsheet
-    # but keep it for the test_interactions_generator.py test
-    if kwargs.get("keep_channel", False):
-        return df
-    return df.drop("channel")
+    sampled_df = sampled_df.with_columns(
+        pl.Series("followfrominteraction", followfrom),
+    )
+
+    # --- 5. Add remaining columns (channel, type, metadata) ---
+    channel_map, channel_weights = get_channel_data_from_registry(registry)
+    channels = generate_channels(n, channel_weights)
+    interaction_types = generate_interaction_types(channels, channel_map)
+
+    sampled_df = sampled_df.with_columns(
+        [
+            pl.Series("channel", channels),
+            pl.Series("type", interaction_types),
+            pl.Series(
+                "identificationmethod",
+                weighted_sample(
+                    [
+                        "Known From outbound Communication",
+                        "Self Identification",
+                        "Cookie match",
+                        "IP Company Match",
+                        None,
+                    ],
+                    [0.3, 0.3, 0.2, 0.1, 0.1],
+                    n=n,
+                ),
+            ),
+            pl.Series(
+                "datasource",
+                weighted_sample(
+                    ["CRM", "Marketing Automation", "Web Analytics", "Social Media", "Survey"],
+                    [0.3, 0.2, 0.2, 0.2, 0.1],
+                    n=n,
+                ),
+            ),
+        ]
+    )
+
+    return sampled_df if kwargs.get("keep_channel", False) else sampled_df.drop("channel")

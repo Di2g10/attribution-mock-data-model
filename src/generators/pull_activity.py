@@ -6,9 +6,11 @@ from typing import Any
 
 import polars as pl
 
-from ..random_utils import fake, make_ids, random_date, weighted_sample
+from ..random_utils import fake, make_ids, random_date, weighted_sample, generate_source_id_mappings
 
 __all__ = ["generate"]
+
+from ..validation import extract_id_column
 
 # Pull activity types with weights
 PULL_ACTIVITY_TYPES = [
@@ -76,24 +78,28 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # Generate pull activity IDs
     ids = make_ids(n, "PULL")
+    prior = kwargs.get("prior", {})
+
+    marketing_asset_ids = extract_id_column(
+        df=prior.get("Marketing Assets", None),
+        id_field="marketing_asset_id",
+    )
 
     # Note: We're not currently using company_df, campaign_df, or person_df
     # but keeping the parameters for future use
-
+    source_info = generate_source_id_mappings(
+        [("marketo", "Activity_GUID"), ("Adobe Analytics", "View_ID")], n
+    )
     # Generate pull activity data with fields required by the spreadsheet
     return pl.DataFrame(
         {
             "id": ids,
             "name": [f"Pull Activity {i}" for i in ids],
             "reachindividuals": [fake.random_int(min=10, max=10000) for _ in ids],
-            "datasource": weighted_sample(
-                ["Web Analytics", "CRM", "Marketing Automation", "Social Media", "Survey"],
-                [0.3, 0.2, 0.2, 0.2, 0.1],
-                n,
-            ),
             "audienceid": [f"AUD{fake.random_int(min=1000, max=9999)}" for _ in ids],
             "reachcompanies": [fake.random_int(min=1, max=1000) for _ in ids],
             "startdate": [random_date() for _ in ids],
             "enddate": [random_date() for _ in ids],
+            "marketing_asset_id": weighted_sample(marketing_asset_ids, n=n),
         }
-    )
+    ).hstack(source_info)

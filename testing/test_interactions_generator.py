@@ -2,14 +2,13 @@
 
 import unittest
 from pathlib import Path
-import json
+from typing import Dict
 
 import polars as pl
 
 from src.generators.interactions import (
     generate,
     DEFAULT_CHANNEL_INTERACTION_TYPES,
-    DEFAULT_CHANNEL_WEIGHTS,
 )
 from src.config_loader import Config
 from src.schema_registry import SchemaRegistry
@@ -20,135 +19,141 @@ SMALL_SAMPLE_SIZE = 10
 TINY_SAMPLE_SIZE = 5
 
 
+def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
+    """Create minimal valid prior data for interactions with person/company and activity links."""
+    company_df = pl.DataFrame(
+        {
+            "company_id": ["CO0000001", "CO0000002"],
+            "company_name": ["Company A", "Company B"],
+        }
+    )
+
+    person_df = pl.DataFrame(
+        {
+            "person_id": ["PER0000001", "PER0000002"],
+            "first_name": ["John", "Jane"],
+        }
+    )
+
+    activity_df = pl.DataFrame(
+        {
+            "id": ["ACT0000001", "ACT0000002"],
+            "targeted_person_id": ["PER0000001", "PER0000002"],
+            "targeted_company_id": ["CO0000001", "CO0000002"],
+        }
+    )
+
+    return {
+        "Company": company_df,
+        "Person": person_df,
+        "Push Activity": activity_df,  # Can also add "Pull Activity" if needed
+    }
+
+
 def test_interactions_unique_ids() -> None:
     """Test that generated interaction IDs are unique."""
-    df = generate(LARGE_SAMPLE_SIZE)
+    df = generate(LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities())
     ids = df.select("interactionid").to_series()
     assert ids.is_unique().all(), "interactionid values should be unique"
     assert df.height == LARGE_SAMPLE_SIZE
 
 
 def test_interactions_with_related_objects() -> None:
-    """Test interaction generation with related objects."""
-    # Create mock DataFrames for related objects
+    """Test that interactions correctly relate to persons, companies, and activities."""
+    # Arrange: load mock prior data with companies, persons, and push activities
+    prior = minimal_prior_with_activities()
+    df = generate(LARGE_SAMPLE_SIZE, prior=prior, keep_channel=True)
 
-    company_df = pl.DataFrame(
-        {
-            "company_id": ["CO0000001", "CO0000002", "CO0000003"],
-            "company_name": ["Company A", "Company B", "Company C"],
-        }
-    )
-
-    person_df = pl.DataFrame(
-        {
-            "person_id": ["PER0000001", "PER0000002", "PER0000003", "PER0000004"],
-            "first_name": ["John", "Jane", "Bob", "Alice"],
-        }
-    )
-
-    pull_activity_df = pl.DataFrame(
-        {
-            "id": ["PULL0000001", "PULL0000002", "PULL0000003"],
-            "name": ["Pull Activity 1", "Pull Activity 2", "Pull Activity 3"],
-        }
-    )
-
-    push_activity_df = pl.DataFrame(
-        {
-            "id": ["PUSH0000001", "PUSH0000002", "PUSH0000003"],
-            "name": ["Push Activity 1", "Push Activity 2", "Push Activity 3"],
-        }
-    )
-
-    # Generate a larger sample to ensure we have follow-up interactions
-    df = generate(
-        LARGE_SAMPLE_SIZE,
-        prior={
-            "Company": company_df,
-            "Person": person_df,
-            "Pull Activity": pull_activity_df,
-            "Push Activity": push_activity_df,
-        },
-        keep_channel=True,  # Keep channel for testing
-    )
-
-    # Verify that the generation works with related data
     assert df.height == LARGE_SAMPLE_SIZE
     assert "interactionid" in df.columns
 
-    # Verify that companyinteracted contains IDs from company_df or None
-    company_ids = set(company_df["company_id"].to_list())
-    company_interacted = set(df["companyinteracted"].drop_nulls().to_list())
+    # --- Test 1: Company IDs are valid ---
+    company_ids = set(prior["Company"]["company_id"].to_list())
+    company_interacted = set(df["interacted_company_id"].drop_nulls().to_list())
     assert company_interacted.issubset(
         company_ids
-    ), f"Company IDs {company_interacted - company_ids} not in {company_ids}"
+    ), f"Unexpected company IDs: {company_interacted - company_ids}"
 
-    # Verify that personinteracted contains IDs from person_df
-    person_ids = set(person_df["person_id"].to_list())
-    person_interacted = set(df["personinteracted"].to_list())
+    # --- Test 2: Person IDs are valid ---
+    person_ids = set(prior["Person"]["person_id"].to_list())
+    person_interacted = set(df["interacted_person_id"].drop_nulls().to_list())
     assert person_interacted.issubset(
         person_ids
-    ), f"Person IDs {person_interacted - person_ids} not in {person_ids}"
+    ), f"Unexpected person IDs: {person_interacted - person_ids}"
 
-    # Verify that activity contains IDs from pull_activity_df or push_activity_df
-    activity_ids = set(pull_activity_df["id"].to_list() + push_activity_df["id"].to_list())
-    activities = set(df["activity"].to_list())
+    # --- Test 3: Activity IDs are valid ---
+    activity_ids = set(prior["Push Activity"]["id"].to_list())
+    activities = set(df["activity_id"].drop_nulls().to_list())
     assert activities.issubset(
         activity_ids
-    ), f"Activity IDs {activities - activity_ids} not in {activity_ids}"
+    ), f"Unexpected activity IDs: {activities - activity_ids}"
 
-    # Verify that follow-up interactions use the same person
+    # --- Test 4: Follow-up interactions share the same person as their reference ---
     follow_ups = df.filter(pl.col("followfrominteraction").is_not_null())
     if follow_ups.height > 0:
+        lookup = df.select(["interactionid", "interacted_person_id"]).to_dict(as_series=False)
+        id_to_person = dict(zip(lookup["interactionid"], lookup["interacted_person_id"]))
+
         for row in follow_ups.iter_rows(named=True):
             follow_from_id = row["followfrominteraction"]
-            person_id = row["personinteracted"]
+            person_id = row["interacted_person_id"]
+            assert person_id == id_to_person.get(
+                follow_from_id
+            ), f"Follow-up person mismatch: {row['interactionid']} vs {follow_from_id}"
 
-            # Find the original interaction
-            original = df.filter(pl.col("interactionid") == follow_from_id)
-            if original.height > 0:
-                original_person_id = original.select("personinteracted").item()
-                assert (
-                    person_id == original_person_id
-                ), f"Follow-up interaction {row['interactionid']} has person {person_id} but original interaction {follow_from_id} has person {original_person_id}"
-
-    # Verify that the same person always has the same company (if not None)
-    person_companies: dict[str, str] = {}
+    # --- Test 5: Each person always maps to the same company (if company exists) ---
+    person_to_company: dict[str, str] = {}
     for row in df.iter_rows(named=True):
-        person_id = row["personinteracted"]
-        company_id = row["companyinteracted"]
+        person_id = row["interacted_person_id"]
+        company_id = row["interacted_company_id"]
 
         if company_id is not None:
-            if person_id in person_companies:
+            if person_id in person_to_company:
                 assert (
-                    person_companies[person_id] == company_id
-                ), f"Person {person_id} has different companies: {person_companies[person_id]} and {company_id}"
+                    person_to_company[person_id] == company_id
+                ), f"Person {person_id} has inconsistent company mappings."
             else:
-                person_companies[person_id] = company_id
+                person_to_company[person_id] = company_id
+
+    # --- Test 6: Interactions match the person/company on the related activity ---
+    activity_df = prior["Push Activity"].select(
+        [
+            pl.col("id").alias("activity_id"),
+            pl.col("targeted_person_id").alias("expected_person_id"),
+            pl.col("targeted_company_id").alias("expected_company_id"),
+        ]
+    )
+    merged = df.join(activity_df, on="activity_id", how="inner")
+
+    mismatched = merged.filter(
+        (pl.col("interacted_person_id") != pl.col("expected_person_id"))
+        | (pl.col("interacted_company_id") != pl.col("expected_company_id"))
+    )
+    assert mismatched.is_empty(), (
+        f"Some interactions do not match their activity's person/company:\n"
+        f"{mismatched.select(['interactionid', 'activity_id', 'interacted_person_id', 'expected_person_id', 'interacted_company_id', 'expected_company_id'])}"
+    )
 
 
 class TestInteractionsWithDesignFile(unittest.TestCase):
-    """Test that interactions are generated with appropriate values from the design file."""
+    """Validate interactions against the design file (channels/types) and activity linkages."""
 
     def setUp(self) -> None:
-        """Set up the test by loading the design file."""
+        """Load the spreadsheet-backed registry and build the channel→type map."""
         # Get the absolute path to the project root directory
         project_root = Path(__file__).parent.parent.absolute()
         self.structure_file_path = (
             project_root / "data" / "input" / "Low Level Field Detail Design(6).xlsx"
         )
 
-        # Check if the file exists
+        # Locate a suitable spreadsheet file if the default path is missing
         if not self.structure_file_path.exists():
             print(f"Warning: File not found: {self.structure_file_path}")
             print("Checking for alternative files...")
-
-            # Look for alternative files in the same directory
             input_dir = project_root / "data" / "input"
             if input_dir.exists():
                 excel_files = list(input_dir.glob("Low Level Field Detail Design*.xlsx"))
                 if excel_files:
-                    # Use the latest version available
                     excel_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
                     self.structure_file_path = excel_files[0]
                     print(f"Using alternative file: {self.structure_file_path}")
@@ -157,63 +162,75 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
             else:
                 self.fail(f"Input directory not found: {input_dir}")
 
-        # Load the configuration and create a registry
+        # Registry derived from the design file
         self.config = Config(self.structure_file_path)
         self.registry = SchemaRegistry(self.config)
 
-        # Extract channels and interaction types from the design file
+        # Spreadsheet-provided channel/type tables
         self.channels_df = self.config.channels
         self.interaction_types_df = self.config.interaction_types
 
-        # Create a mapping of channels to their valid interaction types
-        self.channel_to_interaction_types = {}
+        # Build a mapping: channel -> valid interaction types
+        self.channel_to_interaction_types: dict[str, list[str]] = {}
 
-        # First, add channels and interaction types from the design file
+        # First pull types from the spreadsheet
         if not self.interaction_types_df.is_empty():
             for row in self.interaction_types_df.iter_rows(named=True):
                 channel = row.get("Channel", "")
                 if channel:
-                    # Extract all non-empty values except "Channel" as interaction types
                     interaction_types = [
                         value for key, value in row.items() if key != "Channel" and value
                     ]
                     if interaction_types:
                         self.channel_to_interaction_types[channel] = interaction_types
 
-        # Then, add default channels and interaction types if they're not already in the mapping
+        # Then add any defaults not present in the spreadsheet
         for channel, interaction_types in DEFAULT_CHANNEL_INTERACTION_TYPES.items():
             if channel not in self.channel_to_interaction_types:
                 self.channel_to_interaction_types[channel] = interaction_types
 
+        # Minimal valid `prior` so the generator can link Interaction -> Activity -> Person/Company
+        # We reuse the shared helper defined earlier in this module.
+        self.prior = (
+            minimal_prior_with_activities()
+        )  # provides Push Activity with person/company targets
+
     def test_interactions_with_design_file(self) -> None:
-        """Test that interactions are generated with appropriate values from the design file."""
-        # Skip the test if no channels or interaction types were found
+        """Test Generated Interactions with Design File for channel and type.
+
+        Ensure generated interactions have:
+        - a 'channel' present in the spreadsheet/defaults
+        - a 'type' valid for that channel according to the spreadsheet/defaults
+        """
         if not self.channel_to_interaction_types:
             self.skipTest("No channels or interaction types found in the design file")
 
-        # Generate a large sample of interactions using the registry
-        # Pass keep_channel=True to ensure the channel field is included for validation
-        df = generate(LARGE_SAMPLE_SIZE, registry=self.registry, keep_channel=True)
+        # Generate interactions using the registry; include channel for validation.
+        # We pass `prior` to satisfy the generator's requirement for activity linkage.
+        df = generate(
+            LARGE_SAMPLE_SIZE,
+            registry=self.registry,
+            prior=self.prior,
+            keep_channel=True,
+        )
 
-        # Verify that the generated interactions have the expected fields
+        # Basic shape/columns
         self.assertIn("channel", df.columns, "Generated interactions should have a 'channel' field")
         self.assertIn("type", df.columns, "Generated interactions should have a 'type' field")
 
-        # Verify that each interaction has a valid channel
-        channels = df["channel"].to_list()
-        for channel in channels:
+        # Channels must be known
+        for channel in df["channel"].to_list():
             self.assertIn(
                 channel,
                 self.channel_to_interaction_types.keys(),
-                f"Channel '{channel}' not found in the design file",
+                f"Channel '{channel}' not found in the design file/defaults.",
             )
 
-        # Verify that each interaction has a valid interaction type for its channel
-        for i, row in enumerate(df.iter_rows(named=True)):
+        # Types must be valid for the channel
+        for row in df.iter_rows(named=True):
             channel = row["channel"]
             interaction_type = row["type"]
             valid_types = self.channel_to_interaction_types.get(channel, [])
-
             self.assertIn(
                 interaction_type,
                 valid_types,
@@ -221,123 +238,50 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
                 f"Valid types are: {valid_types}",
             )
 
-        # If we get here, all interactions have valid channels and interaction types
-        print(f"All {df.height} interactions have valid channels and interaction types")
+    def test_interaction_activity_alignment(self) -> None:
+        """Test interaction alignment of Person and company ID.
 
-    def test_compare_defaults_with_spreadsheet(self) -> None:
-        """Compare the default values in the code with the values in the spreadsheet.
-
-        This test extracts the channels and interaction types from the spreadsheet,
-        compares them with the default values in the code, and outputs detailed
-        information about any mismatches. This information can be used to update
-        the default values in the code to match the spreadsheet.
+        Ensure each interaction aligns with its activity targets:
+        interacted_person_id == activity.targeted_person_id
+        interacted_company_id == activity.targeted_company_id
         """
-        # Skip the test if no channels or interaction types were found
-        if not self.channel_to_interaction_types:
-            self.skipTest("No channels or interaction types found in the design file")
-
-        # Get the channels from the spreadsheet
-        spreadsheet_channels = set()
-        if not self.channels_df.is_empty():
-            spreadsheet_channels = set(self.channels_df["Name"].to_list())
-
-        # Get the channels from the default values in the code
-        default_channels = set(DEFAULT_CHANNEL_INTERACTION_TYPES.keys())
-
-        # Compare the channels
-        missing_channels = spreadsheet_channels - default_channels
-        extra_channels = default_channels - spreadsheet_channels
-
-        # Output the results of the channel comparison
-        print("\n=== Channel Comparison ===")
-        print(f"Channels in spreadsheet: {sorted(spreadsheet_channels)}")
-        print(f"Channels in default values: {sorted(default_channels)}")
-        print(f"Channels in spreadsheet but not in default values: {sorted(missing_channels)}")
-        print(f"Channels in default values but not in spreadsheet: {sorted(extra_channels)}")
-
-        # Get the interaction types for each channel from the spreadsheet
-        spreadsheet_channel_interaction_types = {}
-        if not self.interaction_types_df.is_empty():
-            for row in self.interaction_types_df.iter_rows(named=True):
-                channel = row.get("Channel", "")
-                if channel:
-                    # Extract all non-empty values except "Channel" as interaction types
-                    interaction_types = [
-                        value for key, value in row.items() if key != "Channel" and value
-                    ]
-                    if interaction_types:
-                        spreadsheet_channel_interaction_types[channel] = interaction_types
-
-        # Compare the interaction types for each channel
-        print("\n=== Interaction Type Comparison ===")
-        all_channels = sorted(
-            set(
-                list(spreadsheet_channel_interaction_types.keys())
-                + list(DEFAULT_CHANNEL_INTERACTION_TYPES.keys())
-            )
+        df = generate(
+            LARGE_SAMPLE_SIZE,
+            registry=self.registry,
+            prior=self.prior,
+            keep_channel=True,
         )
 
-        for channel in all_channels:
-            spreadsheet_types = set(spreadsheet_channel_interaction_types.get(channel, []))
-            default_types = set(DEFAULT_CHANNEL_INTERACTION_TYPES.get(channel, []))
+        # Prepare expected targets from the Push Activity prior
+        activity_df = self.prior["Push Activity"].select(
+            [
+                pl.col("id").alias("activity_id"),
+                pl.col("targeted_person_id").alias("expected_person_id"),
+                pl.col("targeted_company_id").alias("expected_company_id"),
+            ]
+        )
 
-            missing_types = spreadsheet_types - default_types
-            extra_types = default_types - spreadsheet_types
+        # Join to compare actual vs expected
+        merged = df.join(activity_df, on="activity_id", how="inner")
 
-            print(f"\nChannel: {channel}")
-            print(f"  Interaction types in spreadsheet: {sorted(spreadsheet_types)}")
-            print(f"  Interaction types in default values: {sorted(default_types)}")
-            print(
-                f"  Interaction types in spreadsheet but not in default values: {sorted(missing_types)}"
-            )
-            print(
-                f"  Interaction types in default values but not in spreadsheet: {sorted(extra_types)}"
-            )
+        mismatched = merged.filter(
+            (pl.col("interacted_person_id") != pl.col("expected_person_id"))
+            | (pl.col("interacted_company_id") != pl.col("expected_company_id"))
+        )
 
-        # Output the updated default values that can be used in the code
-        print("\n=== Updated Default Values ===")
-        updated_channel_interaction_types = {}
-
-        # Start with the spreadsheet values
-        for channel, types in spreadsheet_channel_interaction_types.items():
-            updated_channel_interaction_types[channel] = types
-
-        # Add any channels from the default values that aren't in the spreadsheet
-        for channel, types in DEFAULT_CHANNEL_INTERACTION_TYPES.items():
-            if channel not in updated_channel_interaction_types:
-                updated_channel_interaction_types[channel] = types
-
-        # Output the updated default values in a format that can be copied into the code
-        print("DEFAULT_CHANNEL_INTERACTION_TYPES = {")
-        for channel, types in sorted(updated_channel_interaction_types.items()):
-            types_str = ", ".join([f'"{t}"' for t in types])
-            print(f'    "{channel}": [{types_str}],')
-        print("}")
-
-        # Output the updated channel weights
-        print("\nDEFAULT_CHANNEL_WEIGHTS = {")
-        for channel in sorted(updated_channel_interaction_types.keys()):
-            weight = DEFAULT_CHANNEL_WEIGHTS.get(
-                channel, 1.0 / len(updated_channel_interaction_types)
-            )
-            print(f'    "{channel}": {weight:.2f},')
-        print("}")
-
-        # Write the updated default values to a JSON file for easy reference
-        output_file = Path(__file__).parent / "updated_interaction_defaults.json"
-        with output_file.open("w") as f:
-            json.dump(
-                {
-                    "DEFAULT_CHANNEL_INTERACTION_TYPES": updated_channel_interaction_types,
-                    "DEFAULT_CHANNEL_WEIGHTS": {
-                        channel: DEFAULT_CHANNEL_WEIGHTS.get(
-                            channel, 1.0 / len(updated_channel_interaction_types)
-                        )
-                        for channel in updated_channel_interaction_types
-                    },
-                },
-                f,
-                indent=4,
-            )
-
-        print(f"\nUpdated default values written to {output_file}")
+        # If any mismatches, surface a concise diff to aid debugging
+        self.assertTrue(
+            mismatched.is_empty(),
+            msg=str(
+                mismatched.select(
+                    [
+                        "interactionid",
+                        "activity_id",
+                        "interacted_person_id",
+                        "expected_person_id",
+                        "interacted_company_id",
+                        "expected_company_id",
+                    ]
+                )
+            ),
+        )

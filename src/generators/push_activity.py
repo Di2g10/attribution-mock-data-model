@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from random import random
 from typing import Any
 
 import polars as pl
 
-from ..random_utils import fake, make_ids, random_date, weighted_sample
+from ..random_utils import fake, make_ids, random_date, weighted_sample, generate_source_id_mappings
 
 __all__ = ["generate"]
+
+from ..validation import extract_id_column
 
 # Push activity types with weights
 PUSH_ACTIVITY_TYPES = [
@@ -54,11 +57,42 @@ PUSH_ACTIVITY_STATUS_WEIGHTS = [
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of push activity data."""
     # Extract prior data if available
-    # prior = kwargs.get("prior", {})
+    prior = kwargs.get("prior", {})
     # company_df = prior.get("Company", None)
     # campaign_df = prior.get("Campaigns", None)
     # person_df = prior.get("Person", None)
-    # Note: We're not currently using prior or these variables
+    marketing_asset_ids = extract_id_column(
+        df=prior.get("Marketing Assets", None),
+        id_field="marketing_asset_id",
+    )
+    company_ids = extract_id_column(
+        df=prior.get("Company", None),
+        id_field="company_id",
+    )
+    person_ids = extract_id_column(
+        df=prior.get("Person", None),
+        id_field="person_id",
+    )
+    campaign_ids = extract_id_column(
+        df=prior.get("Campaigns", None),
+        id_field="campaign_id",
+    )
+    audience_ids = extract_id_column(
+        df=prior.get("Audience", None),
+        id_field="audience_id",
+    )
+
+    company_targeted_ratio = 0.3
+    # Randomly decide whether each row is targeted at a company or a person
+    is_company_target = [random() < company_targeted_ratio for _ in range(n)]
+
+    # Sample real person/company IDs accordingly
+    targeted_person_ids = [
+        None if is_company else fake.random_element(person_ids) for is_company in is_company_target
+    ]
+    targeted_company_ids = [
+        fake.random_element(company_ids) if is_company else None for is_company in is_company_target
+    ]
 
     # Generate push activity IDs
     ids = make_ids(n, "PUSH")
@@ -72,6 +106,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Probability of an activity being a control group
     control_group_probability = 0.5
 
+    source_info = generate_source_id_mappings(
+        [("marketo", "Activity_GUID"), ("Adobe Analytics", "View_ID")], n
+    )
+
     # Generate push activity data
     return pl.DataFrame(
         {
@@ -80,11 +118,11 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             "date": activity_dates,
             "control": [fake.random.random() < control_group_probability for _ in ids],
             "systemid": [f"SYS{fake.random_int(min=1000, max=9999)}" for _ in ids],
-            "audienceid": [f"AUD{fake.random_int(min=1000, max=9999)}" for _ in ids],
-            "campaign": [f"Campaign {fake.word().capitalize()}" for _ in ids],
-            "companytargeted": [fake.company() for _ in ids],
-            "persontargeted": [fake.name() for _ in ids],
-            "marketingasset": [f"Asset {fake.word().capitalize()}" for _ in ids],
+            "audience_id": weighted_sample(audience_ids, n=n),
+            "campaign_id": weighted_sample(campaign_ids, n=n),
+            "targeted_person_id": targeted_person_ids,
+            "targeted_company_id": targeted_company_ids,
+            "marketing_asset_id": weighted_sample(marketing_asset_ids, n=n),
             "status": weighted_sample(PUSH_ACTIVITY_STATUS, PUSH_ACTIVITY_STATUS_WEIGHTS, n),
         }
-    )
+    ).hstack(source_info)

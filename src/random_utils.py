@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timedelta
-from typing import Sequence, TypeVar, Optional
+from typing import Sequence, TypeVar, Optional, Tuple, Dict, List
 
 from numpy.random import Generator, default_rng
 from faker import Faker
 
+import polars as pl
+
 __all__ = [
     "fake",
+    "generate_source_id_mappings",
     "make_ids",
     "random_date",
     "seed_everything",
@@ -86,3 +89,47 @@ def weighted_sample(
         # Create uniform weights if none provided
         weights = [1.0] * len(population)
     return random.choices(population, weights=weights, k=n)
+
+
+def generate_source_id_mappings(
+    sources: list[tuple[str, str]], n: int, seed: int = 42
+) -> pl.DataFrame:
+    """Generate a dummy mapping of source IDs across multiple source tables.
+
+    :param sources: List of (source_table, source_id_field) pairs.
+    :param n: Total number of rows to generate.
+    :param seed: Random seed for reproducibility.
+    :returns: Polars DataFrame with columns: ``Source Table``, ``Source ID Field``, ``Source ID``.
+    """
+    random.seed(seed)
+
+    # Pre-generate IDs for each source table
+    id_pools: Dict[Tuple[str, str], List[str]] = {
+        (table, field): make_ids(n * 10, prefix=table[:3].upper()) for table, field in sources
+    }
+
+    # Track how many IDs we have used per source
+    usage_tracker: Dict[Tuple[str, str], int] = {key: 0 for key in id_pools}
+
+    # Explicit type so mypy is happy
+    data: Dict[str, List[str]] = {
+        "Source Table": [],
+        "Source ID Field": [],
+        "Source ID": [],
+    }
+
+    for _ in range(n):
+        table, field = random.choice(sources)
+        key: Tuple[str, str] = (table, field)
+        idx = usage_tracker[key]
+
+        # Safeguard in case we go over
+        if idx >= len(id_pools[key]):
+            continue  # or raise if you prefer strict behaviour
+
+        data["Source Table"].append(table)
+        data["Source ID Field"].append(field)
+        data["Source ID"].append(id_pools[key][idx])
+        usage_tracker[key] += 1
+
+    return pl.DataFrame(data)

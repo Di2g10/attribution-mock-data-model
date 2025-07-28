@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import polars as pl
 
@@ -128,29 +128,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # If we couldn't create relationships (no person or company data), create dummy data
     if not relationships:
-        # Generate start dates first
-        start_dates = [random_date() for _ in range(n)]
-
-        # Generate end dates based on start dates to ensure they're always after
-        end_dates: List[Optional[datetime]] = []
-        for start_date in start_dates:
-            if fake.random.random() < DUMMY_END_DATE_PROBABILITY:  # Chance of having an end date
-                days_active = fake.random_int(min=30, max=730)  # Between 1 month and 2 years
-                end_dates.append(start_date + timedelta(days=days_active))
-            else:
-                end_dates.append(None)
-
-        return pl.DataFrame(
-            {
-                "person_id": [f"PER{fake.random_int(min=1, max=9999):07d}" for _ in range(n)],
-                "company_id": [f"CO{fake.random_int(min=1, max=9999):07d}" for _ in range(n)],
-                "roletype": weighted_sample(
-                    ["Primary", "Secondary", "Influencer", "Decision Maker", "End User"], None, n
-                ),
-                "start_date": start_dates,
-                "end_date": end_dates,
-            }
-        )
+        raise ValueError("No person-company relationships found")
 
     # Convert relationships to DataFrame
     return pl.DataFrame(

@@ -29,9 +29,6 @@ def build(
         # Handle special case for "Companies" -> "company"
         module_name = obj_name.lower().replace(" ", "_")
 
-        if module_name == "companies":
-            module_name = "company"
-
         try:
             gen_module: ModuleType = import_module(f"src.generators.{module_name}")
             row_count = registry.row_count(obj_name)
