@@ -1,151 +1,108 @@
-"""Contains functions to generate attribution linking table data."""
+"""Contains testing for the generate attribution linking table function and its helper functions."""
 
-from __future__ import annotations
-
-from typing import Any, Iterable
+from typing import Any
 
 import polars as pl
-
-from ..random_utils import fake, make_ids
 
 __all__ = ["generate"]
 
 
-def _extract_ids(prior: dict[str, pl.DataFrame], key: str, col: str) -> list[str]:
-    """Safely extract a list of IDs from ``prior[key][col]``.
+def _create_ancestry(df: pl.DataFrame, *, row_id: str, parent_id: str) -> pl.DataFrame:
+    """Return every (node, ancestor, distance) triple in the hierarchy."""
+    closure = df.select(
+        pl.col(row_id).alias("origin_id"),
+        pl.col(row_id).alias("ancestor_id"),
+        pl.lit(0).alias("distance"),
+    )
 
-    :param prior: Dictionary of previously generated DataFrames.
-    :param key: Key of the DataFrame to read from ``prior``.
-    :param col: Column name to extract.
-    :returns: List of string IDs; empty list when missing.
+    level = df.filter(pl.col(parent_id).is_not_null()).select(
+        pl.col(row_id).alias("origin_id"),
+        pl.col(parent_id).alias("ancestor_id"),
+        pl.lit(1).alias("distance"),
+    )
+
+    while level.height:
+        closure = pl.concat([closure, level])
+
+        level = (
+            level.join(df, left_on="ancestor_id", right_on=row_id, how="inner")
+            .filter(pl.col(parent_id).is_not_null())
+            .select(
+                pl.col("origin_id"),
+                pl.col(parent_id).alias("ancestor_id"),
+                (pl.col("distance") + 1).alias("distance"),
+            )
+        )
+
+    return closure.unique()  # <- what your test wants
+
+
+def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
+    """From closure build all shortest links between related children.
+
+    From a closure `[origin_id, ancestor_id, distance]`
+    produce a **symmetric** link table `[from_id, to_id, ancestor_id, degrees]`
+    that keeps only the shortest path between each unordered pair.
     """
-    df = prior.get(key)
-    if df is not None and col in df.columns:
-        # Cast to list[str] - Polars may return Any
-        return [str(v) for v in df[col].to_list()]
-    return []
+    a = closure.rename({"origin_id": "node_a", "distance": "dist_a"})
+    b = closure.rename({"origin_id": "node_b", "distance": "dist_b"})
+
+    links_raw = a.join(b, on="ancestor_id", how="inner").with_columns(
+        (pl.col("dist_a") + pl.col("dist_b")).alias("degrees"),
+        # ----------   materialise an unordered-pair key   ----------
+        pl.when(pl.col("node_a") < pl.col("node_b"))
+        .then(pl.concat_str([pl.col("node_a"), pl.col("node_b")], separator="|"))
+        .otherwise(pl.concat_str([pl.col("node_b"), pl.col("node_a")], separator="|"))
+        .alias("pair_key"),
+    )
+
+    # keep one shortest row per unordered pair
+    links_min = (
+        links_raw.sort("degrees")
+        .unique(subset=["pair_key"], keep="first")
+        .select("node_a", "node_b", "ancestor_id", "degrees")
+    )
+
+    # make symmetric and align columns
+
+    # enforce identical column order before stacking
+    wanted_cols = ["from_id", "to_id", "ancestor_id", "degrees"]
+
+    df1 = links_min.rename({"node_a": "from_id", "node_b": "to_id"}).select(wanted_cols)
+    df2 = links_min.rename({"node_a": "to_id", "node_b": "from_id"}).select(wanted_cols)
+    return pl.concat([df1, df2]).sort(["from_id", "to_id"])
 
 
-def _sample_or_none(pool: list[str], n: int) -> list[str | None]:
-    """Sample IDs from a pool or return ``None`` when the pool is empty.
-
-    :param pool: Candidate IDs.
-    :param n: Number of samples to produce.
-    :returns: List of sampled IDs (or ``None`` when pool is empty).
-    """
-    if not pool:
-        return [None] * n
-    # Faker's random has stable API and is already used elsewhere in the codebase
-    return [fake.random_element(pool) for _ in range(n)]
-
-
-def _collect_activity_ids(prior: dict[str, pl.DataFrame], sources: Iterable[str]) -> list[str]:
-    """Collect activity IDs from multiple prior sources.
-
-    :param prior: Dictionary of previously generated DataFrames.
-    :param sources: Iterable of prior keys that contain an ``id`` column.
-    :returns: Combined list of activity IDs.
-    """
-    ids: list[str] = []
-    for key in sources:
-        ids.extend(_extract_ids(prior, key, "id"))
-    return ids
-
-
-def generate_outcome_types(n: int) -> list[str]:
-    """Generate outcome types for attribution links.
-
-    :param n: Number of outcome types to generate.
-    :returns: List of outcome types.
-    """
-    outcome_types = [
-        "Purchase",
-        "Renewal",
-        "Upgrade",
-        "Cross-sell",
-        "Upsell",
-        "Inquiry",
-        "Demo Request",
-        "Trial",
-        "Consultation",
-        "Webinar Registration",
+def _define_schema() -> pl.DataFrame:
+    """Define the Expected return schema."""
+    schema = [
+        ("link_id", pl.String),
+        ("activity_id", pl.String),
+        ("interaction_id", pl.String),
+        ("outcome_type", pl.String),
+        ("outcome_id", pl.String),
+        ("company_id", pl.String),
+        ("person_id", pl.String),
+        ("relation_type", pl.String),
+        ("time_lag", pl.Int64),  # use pl.Float64 if you expect fractional lags
     ]
-    return [outcome_types[i % len(outcome_types)] for i in range(n)]
 
-
-def generate_relation_types(n: int) -> list[str]:
-    """Generate relation types for attribution links.
-
-    :param n: Number of relation types to generate.
-    :returns: List of relation types.
-    """
-    relation_types = [
-        "Direct",
-        "Indirect",
-        "Influencer",
-        "First Touch",
-        "Last Touch",
-        "Middle Touch",
-        "Assisting",
-        "Primary",
-        "Secondary",
-        "Tertiary",
-    ]
-    return [relation_types[i % len(relation_types)] for i in range(n)]
-
-
-def generate_time_lags(n: int) -> list[int]:
-    """Generate time lags for attribution links.
-
-    :param n: Number of time lags to generate.
-    :returns: List of time lags in days.
-    """
-    return [fake.random_int(min=0, max=90) for _ in range(n)]
+    # Create an empty DataFrame
+    return pl.DataFrame(schema=schema)
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
-    """Generate a DataFrame of attribution linking table data.
+    """Generate the attribution linking table deterministically from existing data."""
+    # prior: dict[str, pl.DataFrame] = kwargs.get("prior", {})
 
-    Branching is intentionally minimised to satisfy linter constraints.
+    # pull_activity_df = prior.get("pull_activity_df")
+    # push_activity_df = prior.get("push_activity_df")
+    # interaction_df = prior.get("interaction_df")
+    # person_df = prior.get("person_df")
+    # company_df = prior.get("company_df")
+    # order_df = prior.get("order_df")
+    return _define_schema()
 
-    :param n: Number of attribution links to generate.
-    :param kwargs: Additional keyword arguments.
-        - prior: Dictionary of previously generated DataFrames.
-    :returns: DataFrame containing generated attribution linking table data.
-    """
-    prior: dict[str, pl.DataFrame] = kwargs.get("prior", {})
 
-    # Collect ID pools from prior
-    activity_ids = _collect_activity_ids(prior, ("Pull Activity", "Push Activity"))
-    interaction_ids = _extract_ids(prior, "Interactions", "interactionid")
-    company_ids = _extract_ids(prior, "Company", "company_id")
-    person_ids = _extract_ids(prior, "Person", "person_id")
-
-    # Core IDs
-    link_ids = make_ids(n, "LINK")
-    outcome_ids = make_ids(n, "OUT")
-
-    # Deterministic categorical / numeric fields
-    outcome_types = generate_outcome_types(n)
-    relation_types = generate_relation_types(n)
-    time_lags = generate_time_lags(n)
-
-    # Sample optional foreign keys
-    selected_activity_ids = _sample_or_none(activity_ids, n)
-    selected_interaction_ids = _sample_or_none(interaction_ids, n)
-    selected_company_ids = _sample_or_none(company_ids, n)
-    selected_person_ids = _sample_or_none(person_ids, n)
-
-    return pl.DataFrame(
-        {
-            "link_id": link_ids,
-            "activity_id": selected_activity_ids,
-            "interaction_id": selected_interaction_ids,
-            "outcome_type": outcome_types,
-            "outcome_id": outcome_ids,
-            "company_id": selected_company_ids,
-            "person_id": selected_person_ids,
-            "relation_type": relation_types,
-            "time_lag": time_lags,
-        }
-    )
+def _generate_links_though_person_company(person_df: pl.DataFrame) -> pl.DataFrame:
+    pass
