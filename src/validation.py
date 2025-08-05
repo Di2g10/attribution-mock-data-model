@@ -20,7 +20,7 @@ def validate_object(df: pl.DataFrame, name: str, registry: SchemaRegistry, prior
 
     Placeholder for FK & uniqueness checks (expand later).
     """
-    if df.height != registry.row_count(name):
+    if not registry.check_row_count(name, df.height):
         raise ValueError(f"{name}: expected {registry.row_count(name)} rows, got {df.height}")
 
 

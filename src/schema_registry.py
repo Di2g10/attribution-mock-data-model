@@ -95,7 +95,8 @@ class SchemaRegistry:
         # Candidate column names
         name_col = "name"
         gen_flag_cols = ("generate?", "generate", "gen", "enabled")
-        row_count_cols = ("generate_rows", "rows", "row_count", "rowcount")
+        row_count_cols = ("generate_rows", "Generate_Rows")
+        generation_method_col = "generation_method"
 
         for row in objects_df.iter_rows(named=True):
             name_raw = row.get(name_col, "")
@@ -108,6 +109,10 @@ class SchemaRegistry:
             if gen_val is not None and not _truthy(gen_val):
                 continue  # explicitly disabled
 
+            # Should we check row count?
+            generation_method = row.get(generation_method_col, "")
+            check_row_count = generation_method.lower() != "derived"
+
             # Determine row count, defaulting to 100 only if not specified
             rc_val = _first_present(row, row_count_cols)
             row_count = _coerce_int(rc_val, default=100)
@@ -116,7 +121,7 @@ class SchemaRegistry:
             if row_count <= 0:
                 row_count = 100
 
-            parsed[name] = {"row_count": row_count, "meta": row}
+            parsed[name] = {"row_count": row_count, "meta": row, "check_count": check_row_count}
             order.append(name)
 
         # If no explicit generation_order provided, impose DEFAULT precedence
@@ -128,6 +133,20 @@ class SchemaRegistry:
         self._order = order
 
     # ------------------------------------------------------------------
+    def check_row_count(self, name: str, row_count: int) -> bool:
+        """Check if given row count matches expected row count for given object name.
+
+        :param name: Object name as declared in the workbook.
+        :param row_count: Row count to check against.
+        :raises KeyError: If the object name is not present.
+        :returns: True if row_count needs checking and matches expected_row_count.
+        """
+        if name not in self._objects:
+            raise KeyError(f"Object '{name}' not found in workbook.")
+        if not self._objects[name]["check_count"]:
+            return self._objects[name]["row_count"] > 0
+        return row_count == self._objects[name]["row_count"]
+
     def row_count(self, name: str) -> int:
         """Return the row count for the given object name.
 
@@ -135,6 +154,10 @@ class SchemaRegistry:
         :raises KeyError: If the object name is not present.
         :returns: Integer row count for the object.
         """
+        if name not in self._objects:
+            raise KeyError(f"Object '{name}' not found in workbook.")
+        if not self._objects[name]["check_count"]:
+            return True
         return self._objects[name]["row_count"]
 
     # ------------------------------------------------------------------

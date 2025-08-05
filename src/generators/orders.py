@@ -502,7 +502,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
     # Generate order data with fields from the spreadsheet
     return pl.DataFrame(
         {
-            "id": data.ids,
+            "order_id": data.ids,
             "name": [f"Order {i}" for i in data.ids],
             "company_id": data.order_companies,
             "product": [fake.bs() for _ in data.ids],

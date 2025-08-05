@@ -1,130 +1,97 @@
-"""Contains functions to generate channel data."""
+"""Generate Channel records with sensible `type` and Push/Pull mode."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from random import randint
+from typing import Any, Dict
 
 import polars as pl
 
-from ..random_utils import make_ids
+from ..random_utils import fake, make_ids
 
 __all__ = ["generate"]
 
+# --------------------------------------------------------------------------- #
+# Default vocabularies
+# --------------------------------------------------------------------------- #
+DEFAULT_CHANNEL_TYPES: list[str] = [
+    "Email",
+    "Paid Search",
+    "Display",
+    "Organic Social",
+    "Direct Mail",
+    "SMS",
+    "Telemarketing",
+    "Web",
+]
+# Simple mapping - tweak / extend if you need finer control
+PUSH_TYPES = {"Email", "SMS", "Telemarketing", "Direct Mail"}
+# everything else will be treated as Pull
 
-def get_channel_data_from_registry(registry: Any) -> List[Dict[str, Any]]:
-    """Get channel data from registry.
+DEFAULT_GROUPS = ["ATL", "BTL", "Sales", "Other"]
+DEFAULT_METHODS = ["Known Person", "Audience Inferred", "IP Inferred", "Unknown"]
 
-    :param registry: The schema registry containing channel data
-    :returns: List of dictionaries containing channel data
-    """
-    channels: List[Dict[str, Any]] = []
 
+# --------------------------------------------------------------------------- #
+# Helper to read any pre-configured channels from the registry
+# --------------------------------------------------------------------------- #
+def _registry_channels(registry: Any | None) -> list[Dict[str, Any]]:
     if registry is None:
-        return channels
-
+        return []
     try:
-        # Get channels from registry
-        channels_df = registry.cfg.channels
-        if not channels_df.is_empty():
-            # Convert to list of dictionaries
-            for row in channels_df.iter_rows(named=True):
-                channel = {
-                    "name": row.get("Name", ""),
-                    "group": row.get("Group", ""),
-                    "identifiable_method": row.get("Identifiable method", ""),
-                    "type": row.get("Type", ""),
-                }
-                channels.append(channel)
-    except Exception as e:
-        # If there's an error, return empty list
-        print(f"Error loading channels: {e}")
-
-    return channels
+        df = registry.cfg.channels
+        return [row for row in df.iter_rows(named=True)]
+    except Exception as exc:
+        print(f"[channels] warning: could not hydrate registry - {exc}")
+        return []
 
 
+# --------------------------------------------------------------------------- #
+# Main generator
+# --------------------------------------------------------------------------- #
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
-    """Generate a DataFrame of channel data.
+    """Return *n* rows for the **Channel** dimension.
 
-    :param n: Number of channels to generate
-    :param kwargs: Additional keyword arguments
-        - registry: SchemaRegistry object containing channel data
-    :returns: DataFrame containing generated channel data
+    If a registry is supplied (``registry=SchemaRegistry``), we reuse any
+    pre-defined rows and then pad with synthetic ones until we reach *n*.
     """
-    # Extract registry if available
     registry = kwargs.get("registry")
+    seed_rows = _registry_channels(registry)
 
-    # Get channel data from registry
-    channels = get_channel_data_from_registry(registry)
+    # ── Pad out with synthetic rows if we still need more ──────────────────
+    needed = max(0, n - len(seed_rows))
 
-    # If no channels found or n is greater than available channels, generate additional channels
-    if not channels or n > len(channels):
-        # Generate IDs for all channels
-        channel_ids = make_ids(n, "CHAN")
-
-        # Create a DataFrame with default values for additional channels
-        default_groups = ["ATL", "BTL", "Sales", "Other"]
-        default_methods = ["IP Inferred", "Audience Inferred", "Known Person", "Unknown"]
-
-        # Use existing channels and add generated ones to reach n
-        if channels:
-            existing_count = len(channels)
-            additional_count = n - existing_count
-
-            # Extract data from existing channels
-            channel_ids = channel_ids[:additional_count]
-            names = [f"Channel {i+1}" for i in range(additional_count)]
-            groups = [default_groups[i % len(default_groups)] for i in range(additional_count)]
-            methods = [default_methods[i % len(default_methods)] for i in range(additional_count)]
-            types = [None] * additional_count
-            comments = [""] * additional_count
-
-            # Create DataFrame for additional channels
-            additional_df = pl.DataFrame(
-                {
-                    "channel_id": channel_ids,
-                    "name": names,
-                    "group": groups,
-                    "identifiable_method": methods,
-                    "type": types,
-                    "comment": comments,
-                }
-            )
-
-            # Create DataFrame for existing channels
-            existing_df = pl.DataFrame(
-                {
-                    "channel_id": make_ids(existing_count, "CHAN"),
-                    "name": [c["name"] for c in channels],
-                    "group": [c["group"] for c in channels],
-                    "identifiable_method": [c["identifiable_method"] for c in channels],
-                    "type": [c["type"] for c in channels],
-                    "comment": [c["comment"] for c in channels],
-                }
-            )
-
-            # Combine existing and additional channels
-            return pl.concat([existing_df, additional_df])
-        # Generate all channels if none exist
-        return pl.DataFrame(
+    for _ in range(needed):
+        ch_type = fake.random_element(DEFAULT_CHANNEL_TYPES)
+        seed_rows.append(
             {
-                "channel_id": channel_ids,
-                "name": [f"Channel {i+1}" for i in range(n)],
-                "group": [default_groups[i % len(default_groups)] for i in range(n)],
-                "identifiable_method": [
-                    default_methods[i % len(default_methods)] for i in range(n)
-                ],
-                "type": [None] * n,
+                "Name": f"{ch_type} {randint(1, 9)}",  # type-flavoured name
+                "Group": fake.random_element(DEFAULT_GROUPS),
+                "Identifiable method": fake.random_element(DEFAULT_METHODS),
+                "Type": ch_type,
             }
         )
-    # If we have enough channels in the registry, use them
-    channels = channels[:n]  # Limit to n channels
 
-    return pl.DataFrame(
+    # ── Slice to exactly *n* rows (registry may have had too many) ─────────
+    rows = seed_rows[:n]
+
+    # ── Build DataFrame ────────────────────────────────────────────────────
+    df = pl.DataFrame(
         {
             "channel_id": make_ids(n, "CHAN"),
-            "name": [c["name"] for c in channels],
-            "group": [c["group"] for c in channels],
-            "identifiable_method": [c["identifiable_method"] for c in channels],
-            "type": [c["type"] for c in channels],
+            "name": [r["Name"] for r in rows],
+            "group": [r["Group"] for r in rows],
+            "identifiable_method": [r["Identifiable method"] for r in rows],
+            "type": [r["Type"] for r in rows],
         }
+    )
+
+    # ── Derive the Push / Pull flag ---------------------------------------
+    return df.with_columns(
+        (
+            pl.when(pl.col("type").is_in(PUSH_TYPES))
+            .then(pl.lit("Push"))
+            .otherwise(pl.lit("Pull"))
+            .alias("communication_mode")  # << NEW COLUMN
+        )
     )

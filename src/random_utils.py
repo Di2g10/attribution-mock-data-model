@@ -113,9 +113,9 @@ def generate_source_id_mappings(
 
     # Explicit type so mypy is happy
     data: Dict[str, List[str]] = {
-        "Source Table": [],
-        "Source ID Field": [],
-        "Source ID": [],
+        "source_table": [],
+        "source_id_field": [],
+        "source_id": [],
     }
 
     for _ in range(n):
@@ -127,9 +127,9 @@ def generate_source_id_mappings(
         if idx >= len(id_pools[key]):
             continue  # or raise if you prefer strict behaviour
 
-        data["Source Table"].append(table)
-        data["Source ID Field"].append(field)
-        data["Source ID"].append(id_pools[key][idx])
+        data["source_table"].append(table)
+        data["source_id_field"].append(field)
+        data["source_id"].append(id_pools[key][idx])
         usage_tracker[key] += 1
 
     return pl.DataFrame(data)

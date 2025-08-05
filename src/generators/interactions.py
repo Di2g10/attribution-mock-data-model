@@ -18,6 +18,8 @@ __all__ = [
     "get_channel_data_from_registry",
 ]
 
+from ..validation import extract_id_column
+
 # Default channels with their associated interaction types
 # This will be used as a fallback if the configuration doesn't provide this information
 DEFAULT_CHANNEL_INTERACTION_TYPES: Dict[str, List[str]] = {
@@ -350,7 +352,7 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
 
     return pl.DataFrame(
         {
-            "interactionid": data.ids,
+            "interaction_id": data.ids,
             "identificationmethod": weighted_sample(
                 [
                     "Known From outbound Communication",
@@ -391,26 +393,29 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     registry = kwargs.get("registry")
 
     # --- 1. Gather activities from Push and Pull sources ---
-    activity_frames = []
-    for key in ("Push Activity", "Pull Activity"):
-        df = prior.get(key)
-        if df is not None and {"id", "targeted_person_id", "targeted_company_id"}.issubset(
-            df.columns
-        ):
-            activity_frames.append(
-                df.select(
-                    [
-                        pl.col("id").alias("activity_id"),
-                        pl.col("targeted_person_id").alias("interacted_person_id"),
-                        pl.col("targeted_company_id").alias("interacted_company_id"),
-                    ]
-                )
-            )
-
-    if not activity_frames:
+    marketing_activity_df = prior.get("Marketing Activity")
+    if marketing_activity_df is None or not {
+        "id",
+        "targeted_person_id",
+        "targeted_company_id",
+    }.issubset(marketing_activity_df.columns):
         raise ValueError("No activity data with valid person/company references found.")
 
-    activities_df = pl.concat(activity_frames)
+    person_ids = extract_id_column(prior.get("Person"), "person_id")
+    fallback_series = pl.Series(
+        "random_person_id",
+        weighted_sample(person_ids, n=marketing_activity_df.height),
+    )
+    activities_df = marketing_activity_df.with_columns(fallback_series).select(
+        [
+            pl.col("id").alias("activity_id"),
+            pl.when(pl.col("targeted_person_id").is_not_null())
+            .then(pl.col("targeted_person_id"))
+            .otherwise(pl.col("random_person_id"))
+            .alias("interacted_person_id"),
+            pl.col("targeted_company_id").alias("interacted_company_id"),
+        ]
+    )
 
     # --- 2. Validate against Person Company Role if available ---
     valid_roles = None
@@ -431,7 +436,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     interaction_ids = make_ids(n, "INT")
     sampled_df = activities_df.sample(n=n, with_replacement=True).with_columns(
         [
-            pl.Series("interactionid", interaction_ids),
+            pl.Series("interaction_id", interaction_ids),
             pl.Series("date", [random_date() for _ in range(n)]),
             pl.Series("duration", [fake.random_int(1, 120) for _ in range(n)]),
         ]
@@ -451,7 +456,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ):
             followfrom[i] = last_seen_by_person[person]
         if person is not None:
-            last_seen_by_person[person] = sampled_df[i, "interactionid"]
+            last_seen_by_person[person] = sampled_df[i, "interaction_id"]
 
     sampled_df = sampled_df.with_columns(
         pl.Series("followfrominteraction", followfrom),

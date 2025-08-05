@@ -6,6 +6,20 @@ import polars as pl
 
 __all__ = ["generate"]
 
+from src.random_utils import make_ids
+
+_schema = [
+    ("link_id", pl.String),
+    ("activity_id", pl.String),
+    ("interaction_id", pl.String),
+    ("outcome_type", pl.String),
+    ("outcome_id", pl.String),
+    ("company_id", pl.String),
+    ("person_id", pl.String),
+    ("relation_type", pl.String),
+    ("time_lag", pl.Int64),
+]
+
 
 def _create_ancestry(df: pl.DataFrame, *, row_id: str, parent_id: str) -> pl.DataFrame:
     """Return every (node, ancestor, distance) triple in the hierarchy."""
@@ -75,34 +89,124 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
 
 def _define_schema() -> pl.DataFrame:
     """Define the Expected return schema."""
-    schema = [
-        ("link_id", pl.String),
-        ("activity_id", pl.String),
-        ("interaction_id", pl.String),
-        ("outcome_type", pl.String),
-        ("outcome_id", pl.String),
-        ("company_id", pl.String),
-        ("person_id", pl.String),
-        ("relation_type", pl.String),
-        ("time_lag", pl.Int64),  # use pl.Float64 if you expect fractional lags
-    ]
-
     # Create an empty DataFrame
-    return pl.DataFrame(schema=schema)
+    return pl.DataFrame(schema=_schema)
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate the attribution linking table deterministically from existing data."""
-    # prior: dict[str, pl.DataFrame] = kwargs.get("prior", {})
+    prior: dict[str, pl.DataFrame] = kwargs.get("prior", {})
 
-    # pull_activity_df = prior.get("pull_activity_df")
-    # push_activity_df = prior.get("push_activity_df")
-    # interaction_df = prior.get("interaction_df")
-    # person_df = prior.get("person_df")
-    # company_df = prior.get("company_df")
-    # order_df = prior.get("order_df")
-    return _define_schema()
+    interaction_df = prior.get("Interactions")
+    person_df = prior.get("Person")
+    company_df = prior.get("Company")
+    order_df = prior.get("Orders")
+    person_company_role_df = prior.get("Person Company Role")
+
+    person_company_link_df = _generate_links_though_person_company(
+        person_df, interaction_df, company_df, order_df, person_company_role_df
+    )
+    # Generate other link objects e.g. Interaction -> Company, Interaction -> Order
+
+    combined_links = person_company_link_df  # Concatentate these once others created
+
+    # Filter on dates and add date difference
+    filtered_links = _date_difference_filter(combined_links, interaction_df, order_df)
+
+    # Add activity IDs
+
+    # Add person IDs
+
+    # Add Product Distance
+
+    # Generate Link IDs
+    link_ids = pl.Series("link_id", make_ids(filtered_links.height, "LINK"))
+
+    return filtered_links.with_columns(link_ids)
 
 
-def _generate_links_though_person_company(person_df: pl.DataFrame) -> pl.DataFrame:
-    pass
+def _generate_links_though_person_company(
+    person_df: pl.DataFrame,
+    interaction_df: pl.DataFrame,
+    company_df: pl.DataFrame,
+    order_df: pl.DataFrame,
+    person_company_role_df: pl.DataFrame,
+) -> pl.DataFrame:
+    """Generate the links though person company."""
+    company_ancestry = _create_ancestry(
+        company_df, row_id="company_id", parent_id="Parent_Company_ID"
+    )
+    company_links = _build_links(company_ancestry)
+
+    df = interaction_df
+    df = df.join(
+        person_company_role_df, left_on="interacted_person_id", right_on="person_id", how="inner"
+    )
+    df = df.join(company_links, left_on="company_id", right_on="from_id", how="inner")
+    links_raw = df.join(order_df, left_on="to_id", right_on="company_id", how="inner")
+
+    n = links_raw.height
+    schema = _define_schema()
+    if n == 0:
+        # return an *empty* frame with the right dtypes so downstream code is safe
+        return schema
+
+    links_calculated = (
+        links_raw
+        # 1. deterministic / generated fields
+        .with_columns(
+            pl.lit("Order").alias("outcome_type"),
+            pl.lit("Interaction-Person-Company-Order").alias("relation_type"),
+        ).rename(
+            {
+                "interaction_id": "interaction_id",
+                "order_id": "outcome_id",
+                "interacted_person_id": "person_id",
+            }
+        )  # no-op if already correct
+    )
+    return (
+        links_calculated.with_columns(  # add any missing columns with nulls
+            [
+                pl.lit(None).cast(dt).alias(col)
+                for col, dt in _schema
+                if col not in links_calculated.columns
+            ]
+        )
+        # 3. final column order
+        .select([col for col, _ in _schema])
+        # 4. cast to expected dtypes (optional but tidy)
+        .with_columns(
+            pl.col("time_lag").cast(pl.Int64),
+            pl.all().exclude("time_lag").cast(pl.String),
+        )
+    )
+
+
+def _date_difference_filter(
+    link: pl.DataFrame, interaction_df: pl.DataFrame, outcome_df: pl.DataFrame
+) -> pl.DataFrame:
+    """Calculate the difference between activity and outcome & Filter interaction after outcome."""
+    # check we have the necessary interaction ID and outcome ID
+    missing = [c for c in ("interaction_id", "outcome_id") if c not in link.columns]
+    if missing:  # pragma: no cover
+        raise ValueError(f"Required column(s) missing: {', '.join(missing)}")
+
+    return (
+        link.join(interaction_df, on="interaction_id", how="inner", suffix="_interaction")
+        .join(outcome_df, left_on="outcome_id", right_on="order_id", how="inner", suffix="_outcome")
+        .with_columns(
+            (pl.col("date_raised") - pl.col("date")).alias("_lag"),
+        )
+        .filter(pl.col("_lag") >= pl.duration(days=0))
+        .with_columns(
+            # convert to *integer days* and drop helper
+            pl.col("_lag")
+            .dt.total_days()
+            .cast(pl.Int64)
+            .alias("time_lag")
+        )
+        .drop("_lag")
+        # 3. final column order
+        .select([name for name, _ in _schema])
+    )

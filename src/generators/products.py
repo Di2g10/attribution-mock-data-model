@@ -346,9 +346,13 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Level 1 (top level): ~10% of products
     # Level 2 (middle level): ~30% of products
     # Level 3 (bottom level): ~60% of products
-    level1_count = max(1, int(n * 0.1))
-    level2_count = max(1, int(n * 0.3))
-    level3_count = n - level1_count - level2_count
+    level1_count = max(1, round(n * 0.1))
+    remaining = n - level1_count
+
+    level2_count = min(remaining, round(n * 0.3))
+    remaining -= level2_count
+
+    level3_count = remaining
 
     # Generate product IDs for each level
     all_ids = make_ids(n, "PROD")
@@ -358,10 +362,18 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # Generate products for each level
     level1_categories, level1_df = generate_level1_products(level1_count, level1_ids)
-    level2_names, level2_df = generate_level2_products(
-        level2_count, level2_ids, level1_ids, level1_categories
-    )
-    level3_df = generate_level3_products(level3_count, level3_ids, level2_ids, level2_names)
+
+    level2_names: List[str] = []
+    level2_df = pl.DataFrame()
+    if level2_count:
+        level2_names, level2_df = generate_level2_products(
+            level2_count, level2_ids, level1_ids, level1_categories
+        )
+
+    level3_df = pl.DataFrame()
+    if level3_count:
+        level3_df = generate_level3_products(level3_count, level3_ids, level2_ids, level2_names)
 
     # Combine all levels into a single DataFrame
-    return pl.concat([level1_df, level2_df, level3_df])
+    frames = [df for df in (level1_df, level2_df, level3_df) if df.height]
+    return pl.concat(frames)
