@@ -264,7 +264,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of campaign data."""
     # Extract company data from prior if available
     prior = kwargs.get("prior", {})
-    company_df = prior.get("Company", None)
+    company_df = prior.get("Company")
+    product_df = prior.get("Products")
+
+    product_ids = product_df.select("product_id").to_series().to_list()
 
     # Generate campaign IDs
     ids = make_ids(n, "CAM")
@@ -321,7 +324,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 )
                 for _ in ids
             ],
-            "product_family": bt_products,  # Use the same BT products for product_family
+            "product_id": weighted_sample(product_ids, n=n),
             "business_unit": weighted_sample(
                 ["SMB", "CPS", "Global", "Wholesale"],
                 [0.5, 0.3, 0.1, 0.1],

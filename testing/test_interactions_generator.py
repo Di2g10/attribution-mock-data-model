@@ -46,15 +46,15 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
     return {
         "Company": company_df,
         "Person": person_df,
-        "Push Activity": activity_df,  # Can also add "Pull Activity" if needed
+        "Marketing Activity": activity_df,  # Can also add "Pull Activity" if needed
     }
 
 
 def test_interactions_unique_ids() -> None:
     """Test that generated interaction IDs are unique."""
     df = generate(LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities())
-    ids = df.select("interactionid").to_series()
-    assert ids.is_unique().all(), "interactionid values should be unique"
+    ids = df.select("interaction_id").to_series()
+    assert ids.is_unique().all(), "interaction_id values should be unique"
     assert df.height == LARGE_SAMPLE_SIZE
 
 
@@ -65,7 +65,7 @@ def test_interactions_with_related_objects() -> None:
     df = generate(LARGE_SAMPLE_SIZE, prior=prior, keep_channel=True)
 
     assert df.height == LARGE_SAMPLE_SIZE
-    assert "interactionid" in df.columns
+    assert "interaction_id" in df.columns
 
     # --- Test 1: Company IDs are valid ---
     company_ids = set(prior["Company"]["company_id"].to_list())
@@ -82,7 +82,7 @@ def test_interactions_with_related_objects() -> None:
     ), f"Unexpected person IDs: {person_interacted - person_ids}"
 
     # --- Test 3: Activity IDs are valid ---
-    activity_ids = set(prior["Push Activity"]["id"].to_list())
+    activity_ids = set(prior["Marketing Activity"]["id"].to_list())
     activities = set(df["activity_id"].drop_nulls().to_list())
     assert activities.issubset(
         activity_ids
@@ -91,15 +91,15 @@ def test_interactions_with_related_objects() -> None:
     # --- Test 4: Follow-up interactions share the same person as their reference ---
     follow_ups = df.filter(pl.col("followfrominteraction").is_not_null())
     if follow_ups.height > 0:
-        lookup = df.select(["interactionid", "interacted_person_id"]).to_dict(as_series=False)
-        id_to_person = dict(zip(lookup["interactionid"], lookup["interacted_person_id"]))
+        lookup = df.select(["interaction_id", "interacted_person_id"]).to_dict(as_series=False)
+        id_to_person = dict(zip(lookup["interaction_id"], lookup["interacted_person_id"]))
 
         for row in follow_ups.iter_rows(named=True):
             follow_from_id = row["followfrominteraction"]
             person_id = row["interacted_person_id"]
             assert person_id == id_to_person.get(
                 follow_from_id
-            ), f"Follow-up person mismatch: {row['interactionid']} vs {follow_from_id}"
+            ), f"Follow-up person mismatch: {row['interaction_id']} vs {follow_from_id}"
 
     # --- Test 5: Each person always maps to the same company (if company exists) ---
     person_to_company: dict[str, str] = {}
@@ -116,7 +116,7 @@ def test_interactions_with_related_objects() -> None:
                 person_to_company[person_id] = company_id
 
     # --- Test 6: Interactions match the person/company on the related activity ---
-    activity_df = prior["Push Activity"].select(
+    activity_df = prior["Marketing Activity"].select(
         [
             pl.col("id").alias("activity_id"),
             pl.col("targeted_person_id").alias("expected_person_id"),
@@ -131,7 +131,7 @@ def test_interactions_with_related_objects() -> None:
     )
     assert mismatched.is_empty(), (
         f"Some interactions do not match their activity's person/company:\n"
-        f"{mismatched.select(['interactionid', 'activity_id', 'interacted_person_id', 'expected_person_id', 'interacted_company_id', 'expected_company_id'])}"
+        f"{mismatched.select(['interaction_id', 'activity_id', 'interacted_person_id', 'expected_person_id', 'interacted_company_id', 'expected_company_id'])}"
     )
 
 
@@ -253,7 +253,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         )
 
         # Prepare expected targets from the Push Activity prior
-        activity_df = self.prior["Push Activity"].select(
+        activity_df = self.prior["Marketing Activity"].select(
             [
                 pl.col("id").alias("activity_id"),
                 pl.col("targeted_person_id").alias("expected_person_id"),
@@ -275,7 +275,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
             msg=str(
                 mismatched.select(
                     [
-                        "interactionid",
+                        "interaction_id",
                         "activity_id",
                         "interacted_person_id",
                         "expected_person_id",

@@ -31,6 +31,7 @@ class OrderData:
     previous_order_probability: float
     related_opportunity_probability: float
     causal_interaction_probability: float
+    order_product_ids: List[str]
 
 
 # Maximum number of days before an order for a causal interaction
@@ -259,11 +260,11 @@ CESSATION_REASON_WEIGHTS = [
 
 def _extract_prior_data(
     prior: Dict[str, Any],
-) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Extract company, person, interaction, and person-company role data from prior data.
+) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Extract company, person, interaction, person-company role, and Product data from prior data.
 
     :param prior: Dictionary of prior generated data
-    :returns: Tuple of (company_df, person_df, interaction_df, person_company_role_df)
+    :returns: Tuple of (company_df, person_df, interaction_df, person_company_role_df, product_df)
     """
     # Extract company data if available
     company_df = prior.get("Company")
@@ -277,7 +278,10 @@ def _extract_prior_data(
     # Extract person-company role data if available
     person_company_role_df = prior.get("PersonCompanyRole")
 
-    return company_df, person_df, interaction_df, person_company_role_df
+    # Extract person-company role data if available
+    product_df = prior.get("Products")
+
+    return company_df, person_df, interaction_df, person_company_role_df, product_df
 
 
 def _generate_basic_order_data(
@@ -385,12 +389,9 @@ def _assign_contacts_to_orders(
         elif company_person_map.get(company):
             # This is a real company ID with associated persons
             order_contacts.append(fake.random.choice(company_person_map[company]))
-        elif person_ids:
-            # This is a real company ID but no specific persons, use any person
-            order_contacts.append(fake.random.choice(person_ids))
         else:
-            # No person data available, generate a fake contact
-            order_contacts.append(fake.name())
+            # This is a real company ID but no specific persons, use any person
+            order_contacts.append(None)
     return order_contacts
 
 
@@ -437,6 +438,14 @@ def _process_interaction_data(
 ) -> Tuple[Dict[str, List[str]], Dict[str, datetime]]:
     """Process interaction data for causal interactions.
 
+    Extracts interaction IDs, company IDs, and dates from the interactions DataFrame
+    to create mappings used for finding causal interactions for orders.
+
+    Expected columns in interaction_df:
+    - "interaction_id": Unique identifier for each interaction
+    - "interacted_company_id": Company ID associated with the interaction
+    - "date": Date when the interaction occurred
+
     :param interaction_df: DataFrame containing interaction data
     :returns: Tuple of (company_interactions_map, interaction_dates_map)
     """
@@ -447,13 +456,13 @@ def _process_interaction_data(
     # If we have interaction data, extract interaction IDs and dates
     if (
         interaction_df is not None
-        and "interactionid" in interaction_df.columns
+        and "interaction_id" in interaction_df.columns
         and "date" in interaction_df.columns
     ):
         # Create a mapping of companies to interactions
         for row in interaction_df.iter_rows(named=True):
-            interaction_id = row.get("interactionid")
-            company = row.get("companyinteracted")
+            interaction_id = row.get("interaction_id")
+            company = row.get("interacted_company_id")
             date = row.get("date")
 
             if interaction_id and date:
@@ -505,17 +514,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
             "order_id": data.ids,
             "name": [f"Order {i}" for i in data.ids],
             "company_id": data.order_companies,
-            "product": [fake.bs() for _ in data.ids],
-            "product_family": weighted_sample(
-                ["Hardware", "Software", "Services", "Consulting", "Support"],
-                [0.3, 0.3, 0.2, 0.1, 0.1],
-                data.n,
-            ),
-            "product_group": weighted_sample(
-                ["Enterprise", "SMB", "Consumer", "Government", "Education"],
-                [0.3, 0.3, 0.2, 0.1, 0.1],
-                data.n,
-            ),
+            "product_id": weighted_sample(data.order_product_ids, n=data.n),
             "product_price_type": weighted_sample(
                 ["Fixed", "Variable", "Tiered", "Subscription", "Usage-based"],
                 [0.3, 0.3, 0.2, 0.1, 0.1],
@@ -613,7 +612,9 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     prior = kwargs.get("prior", {})
 
     # Extract company, person, interaction, and person-company role data
-    company_df, person_df, interaction_df, person_company_role_df = _extract_prior_data(prior)
+    company_df, person_df, interaction_df, person_company_role_df, product_df = _extract_prior_data(
+        prior
+    )
 
     # Generate basic order data
     ids, order_dates, delivery_dates, order_amounts = _generate_basic_order_data(n)
@@ -635,6 +636,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Create order-company mappings for previous orders
     company_orders_map = _create_order_company_mappings(ids, order_dates, order_companies)
 
+    order_product_ids = product_df.select("product_id").to_series().to_list()
+
     # Create OrderData instance
     order_data = OrderData(
         n=n,
@@ -651,6 +654,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         previous_order_probability=previous_order_probability,
         related_opportunity_probability=related_opportunity_probability,
         causal_interaction_probability=causal_interaction_probability,
+        order_product_ids=order_product_ids,
     )
 
     # Build the final DataFrame with all fields

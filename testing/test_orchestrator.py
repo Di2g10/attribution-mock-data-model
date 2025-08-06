@@ -5,7 +5,7 @@ from pathlib import Path
 from src.orchestrator import build
 
 # Constants for expected row counts
-EXPECTED_COMPANY_ROWS = 10
+EXPECTED_COMPANY_ROWS = 100
 
 
 def test_orchestrator_build(tmp_path: Path, workbook_path: Path) -> None:
