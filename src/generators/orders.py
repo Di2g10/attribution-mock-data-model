@@ -310,45 +310,90 @@ def _generate_basic_order_data(
     return ids, order_dates, delivery_dates, order_amounts
 
 
-def _create_company_person_map(
+def _create_company_person_map(  # noqa: PLR0912
     company_ids: List[str],
     person_ids: List[str],
     person_company_role_df: Optional[pl.DataFrame],
-) -> Dict[str, List[str]]:
-    """Create a mapping of companies to persons.
+    interaction_df: Optional[pl.DataFrame] = None,
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    """Create mappings between companies and persons.
+
+    This function has higher complexity due to the need to handle multiple data sources
+    (person-company role data and interaction data) and build bidirectional mappings.
 
     :param company_ids: List of company IDs
     :param person_ids: List of person IDs
     :param person_company_role_df: DataFrame containing person-company role data
-    :returns: Dictionary mapping company IDs to lists of person IDs
+    :param interaction_df: DataFrame containing interaction data
+    :returns: Tuple of (company_to_person_map, person_to_company_map)
     """
     company_person_map: Dict[str, List[str]] = {}
+    person_company_map: Dict[str, List[str]] = {}
 
-    # First check if we have person-company role data
+    # First check if we have interaction data
+    if (
+        interaction_df is not None
+        and "interacted_company_id" in interaction_df.columns
+        and "interacted_person_id" in interaction_df.columns
+    ):
+        # Use interaction data to create the mappings
+        for row in interaction_df.iter_rows(named=True):
+            company_id = row.get("interacted_company_id")
+            person_id = row.get("interacted_person_id")
+
+            if person_id and company_id:
+                # Add to company-to-person mapping
+                if company_id not in company_person_map:
+                    company_person_map[company_id] = []
+                if person_id not in company_person_map[company_id]:
+                    company_person_map[company_id].append(person_id)
+
+                # Add to person-to-company mapping
+                if person_id not in person_company_map:
+                    person_company_map[person_id] = []
+                if company_id not in person_company_map[person_id]:
+                    person_company_map[person_id].append(company_id)
+
+    # Then check if we have person-company role data
     if (
         person_company_role_df is not None
         and "person_id" in person_company_role_df.columns
         and "company_id" in person_company_role_df.columns
     ):
-        # Use person-company role data to create the mapping
+        # Use person-company role data to create the mappings
         for row in person_company_role_df.iter_rows(named=True):
             person_id = row.get("person_id")
             company_id = row.get("company_id")
 
             if person_id and company_id:
+                # Add to company-to-person mapping
                 if company_id not in company_person_map:
                     company_person_map[company_id] = []
                 if person_id not in company_person_map[company_id]:
                     company_person_map[company_id].append(person_id)
-    # If we don't have person-company role data but have both company and person data
-    elif company_ids and person_ids:
+
+                # Add to person-to-company mapping
+                if person_id not in person_company_map:
+                    person_company_map[person_id] = []
+                if company_id not in person_company_map[person_id]:
+                    person_company_map[person_id].append(company_id)
+
+    # If we don't have person-company role data or interaction data but have both company and person data
+    elif not company_person_map and company_ids and person_ids:
         # Assign multiple persons to each company
         for company_id in company_ids:
             # Assign 1-5 random persons to each company
             num_persons = fake.random_int(min=1, max=min(5, len(person_ids)))
-            company_person_map[company_id] = fake.random.sample(person_ids, num_persons)
+            selected_persons = fake.random.sample(person_ids, num_persons)
+            company_person_map[company_id] = selected_persons
 
-    return company_person_map
+            # Also build the person-to-company mapping
+            for person_id in selected_persons:
+                if person_id not in person_company_map:
+                    person_company_map[person_id] = []
+                person_company_map[person_id].append(company_id)
+
+    return company_person_map, person_company_map
 
 
 def _assign_companies_to_orders(company_ids: List[str], ids: List[str]) -> List[str]:
@@ -369,18 +414,68 @@ def _assign_companies_to_orders(company_ids: List[str], ids: List[str]) -> List[
     return order_companies
 
 
-def _assign_contacts_to_orders(
+def _assign_contacts_to_orders(  # noqa: PLR0913, PLR0912
     order_companies: List[str],
     company_person_map: Dict[str, List[str]],
     person_ids: List[str],
+    person_company_map: Dict[str, List[str]],
+    person_company_role_df: Optional[pl.DataFrame] = None,
+    interaction_df: Optional[pl.DataFrame] = None,
 ) -> List[str]:
     """Assign contacts to orders based on company-person mapping.
+
+    This function has higher complexity due to the need to satisfy multiple constraints:
+    1. Contacts must have interacted with the company (for test_contact_consistent_with_company)
+    2. Contacts must have a role in the company (for test_orders_respect_person_company_roles)
+    3. The function needs to handle various edge cases and fallbacks when these constraints
+       cannot be satisfied simultaneously.
 
     :param order_companies: List of company IDs or names assigned to orders
     :param company_person_map: Dictionary mapping company IDs to lists of person IDs
     :param person_ids: List of person IDs
+    :param person_company_map: Dictionary mapping person IDs to lists of company IDs
+    :param person_company_role_df: DataFrame containing person-company role data
+    :param interaction_df: DataFrame containing interaction data
     :returns: List of person IDs or names assigned to orders
     """
+    # Create a mapping of companies to persons based on person-company role data
+    role_based_company_person_map: Dict[str, List[str]] = {}
+
+    if (
+        person_company_role_df is not None
+        and "person_id" in person_company_role_df.columns
+        and "company_id" in person_company_role_df.columns
+    ):
+        # Use person-company role data to create the mapping
+        for row in person_company_role_df.iter_rows(named=True):
+            person_id = row.get("person_id")
+            company_id = row.get("company_id")
+
+            if person_id and company_id:
+                if company_id not in role_based_company_person_map:
+                    role_based_company_person_map[company_id] = []
+                if person_id not in role_based_company_person_map[company_id]:
+                    role_based_company_person_map[company_id].append(person_id)
+
+    # Create a mapping of companies to persons based on interaction data
+    interaction_based_company_person_map: Dict[str, List[str]] = {}
+
+    if (
+        interaction_df is not None
+        and "interacted_company_id" in interaction_df.columns
+        and "interacted_person_id" in interaction_df.columns
+    ):
+        # Use interaction data to create the mapping
+        for row in interaction_df.iter_rows(named=True):
+            company_id = row.get("interacted_company_id")
+            person_id = row.get("interacted_person_id")
+
+            if person_id and company_id:
+                if company_id not in interaction_based_company_person_map:
+                    interaction_based_company_person_map[company_id] = []
+                if person_id not in interaction_based_company_person_map[company_id]:
+                    interaction_based_company_person_map[company_id].append(person_id)
+
     order_contacts = []
     for company in order_companies:
         if isinstance(company, str) and not company.startswith("CO"):
@@ -388,9 +483,43 @@ def _assign_contacts_to_orders(
             order_contacts.append(fake.name())
         elif company_person_map.get(company):
             # This is a real company ID with associated persons
-            order_contacts.append(fake.random.choice(company_person_map[company]))
+
+            # If we have interaction-based mapping, we must use it to ensure test_contact_consistent_with_company passes
+            if interaction_based_company_person_map.get(company):
+                # If we also have role-based mapping, try to find the intersection
+                if role_based_company_person_map.get(company):
+                    # Find persons that have both a role in the company and have interacted with it
+                    valid_persons = [
+                        person
+                        for person in interaction_based_company_person_map[company]
+                        if person in role_based_company_person_map[company]
+                    ]
+
+                    if valid_persons:
+                        order_contacts.append(fake.random.choice(valid_persons))
+                        continue
+
+                # If no intersection or no role-based mapping, use interaction-based mapping
+                valid_persons = interaction_based_company_person_map[company]
+                if valid_persons:
+                    order_contacts.append(fake.random.choice(valid_persons))
+                    continue
+
+            # If no interaction-based mapping but we have role-based mapping, use it
+            elif role_based_company_person_map.get(company):
+                valid_persons = role_based_company_person_map[company]
+                if valid_persons:
+                    order_contacts.append(fake.random.choice(valid_persons))
+                    continue
+
+            # If we don't have any valid persons, use any person associated with the company
+            valid_persons = company_person_map[company]
+            if valid_persons:
+                order_contacts.append(fake.random.choice(valid_persons))
+            else:
+                order_contacts.append(None)
         else:
-            # This is a real company ID but no specific persons, use any person
+            # This is a real company ID but no specific persons, use None
             order_contacts.append(None)
     return order_contacts
 
@@ -400,14 +529,16 @@ def _create_company_person_relationships(
     person_df: Optional[pl.DataFrame],
     person_company_role_df: Optional[pl.DataFrame],
     ids: List[str],
-) -> Tuple[List[str], List[str], Dict[str, List[str]], List[str], List[str]]:
+    interaction_df: Optional[pl.DataFrame] = None,
+) -> Tuple[List[str], List[str], Dict[str, List[str]], Dict[str, List[str]], List[str], List[str]]:
     """Create company-person relationships and assign to orders.
 
     :param company_df: DataFrame containing company data
     :param person_df: DataFrame containing person data
     :param person_company_role_df: DataFrame containing person-company role data
     :param ids: List of order IDs
-    :returns: Tuple of (company_ids, person_ids, company_person_map, order_companies, order_contacts)
+    :param interaction_df: DataFrame containing interaction data
+    :returns: Tuple of (company_ids, person_ids, company_person_map, person_company_map, order_companies, order_contacts)
     """
     # Extract company and person IDs
     company_ids: List[str] = []
@@ -421,16 +552,32 @@ def _create_company_person_relationships(
     if person_df is not None and "person_id" in person_df.columns:
         person_ids = person_df["person_id"].to_list()
 
-    # Create a mapping of companies to persons
-    company_person_map = _create_company_person_map(company_ids, person_ids, person_company_role_df)
+    # Create mappings between companies and persons
+    company_person_map, person_company_map = _create_company_person_map(
+        company_ids, person_ids, person_company_role_df, interaction_df
+    )
 
     # Assign companies to orders
     order_companies = _assign_companies_to_orders(company_ids, ids)
 
     # Assign contacts to orders based on company-person mapping
-    order_contacts = _assign_contacts_to_orders(order_companies, company_person_map, person_ids)
+    order_contacts = _assign_contacts_to_orders(
+        order_companies,
+        company_person_map,
+        person_ids,
+        person_company_map,
+        person_company_role_df,
+        interaction_df,
+    )
 
-    return company_ids, person_ids, company_person_map, order_companies, order_contacts
+    return (
+        company_ids,
+        person_ids,
+        company_person_map,
+        person_company_map,
+        order_companies,
+        order_contacts,
+    )
 
 
 def _process_interaction_data(
@@ -626,8 +773,15 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     causal_interaction_probability = 0.4
 
     # Create company-person relationships and assign to orders
-    company_ids, person_ids, company_person_map, order_companies, order_contacts = (
-        _create_company_person_relationships(company_df, person_df, person_company_role_df, ids)
+    (
+        company_ids,
+        person_ids,
+        company_person_map,
+        person_company_map,
+        order_companies,
+        order_contacts,
+    ) = _create_company_person_relationships(
+        company_df, person_df, person_company_role_df, ids, interaction_df
     )
 
     # Process interaction data for causal interactions

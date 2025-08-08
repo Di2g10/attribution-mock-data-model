@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timedelta
-from typing import Sequence, TypeVar, Optional, Tuple, Dict, List
+from typing import Sequence, TypeVar, Optional, Tuple, Dict, List, Any, Mapping
 
 from numpy.random import Generator, default_rng
 from faker import Faker
@@ -13,10 +13,13 @@ import polars as pl
 
 __all__ = [
     "fake",
+    "generate_mapped_values",
     "generate_source_id_mappings",
     "make_ids",
+    "make_ids_with_duplicates",
     "random_date",
     "seed_everything",
+    "weighted_sample",
 ]
 
 # Module-level Faker instance and NumPy Generator
@@ -64,14 +67,44 @@ def make_ids_with_duplicates(
     """Produce a list of length n by sampling from source_ids with replacement.
 
     With probability `none_rate` each slot will be None instead of an ID.
+
+    Performance optimizations:
+    - Uses NumPy's vectorized random operations for better performance with large n
+    - Generates all random values at once instead of in a loop
+    - Handles the None case efficiently with vectorized operations
     """
-    out: list[str | None] = []
-    for _ in range(n):
-        if none_rate > 0 and random.random() < none_rate:
-            out.append(None)
+    if not source_ids:
+        return [None] * n
+
+    # Use numpy's vectorized random operations for better performance
+    if none_rate <= 0:
+        # PERFORMANCE OPTIMIZATION: Generate all indices at once
+        # Instead of calling random.choice n times in a loop, we generate
+        # all random indices in a single vectorized operation
+        indices = _rng.integers(0, len(source_ids), size=n)
+        return [source_ids[i] for i in indices]
+    # PERFORMANCE OPTIMIZATION: Vectorized handling of None values
+    # Generate a boolean mask for None values in a single operation
+    none_mask = _rng.random(n) < none_rate
+    none_count = none_mask.sum()
+
+    # Generate indices for non-None values all at once
+    indices = _rng.integers(0, len(source_ids), size=n - none_count)
+
+    # Create the result list
+    result: list[str | None] = [None] * n
+    non_none_idx = 0
+
+    # This loop is still needed to map the indices to the right positions
+    # based on the none_mask, but we've minimized the random operations
+    for i in range(n):
+        if none_mask[i]:
+            result[i] = None
         else:
-            out.append(random.choice(source_ids))
-    return out
+            result[i] = source_ids[indices[non_none_idx]]
+            non_none_idx += 1
+
+    return result
 
 
 T = TypeVar("T")
@@ -89,6 +122,95 @@ def weighted_sample(
         # Create uniform weights if none provided
         weights = [1.0] * len(population)
     return random.choices(population, weights=weights, k=n)
+
+
+def generate_mapped_values(
+    parent_values: Sequence[str],
+    mapping_dict: Mapping[str, Sequence[Any]],
+    fallback_values: Optional[Sequence[Any]] = None,
+) -> list[Any]:
+    """Generate child values based on parent categories using a mapping dictionary.
+
+    This function efficiently maps parent categories to child values using a provided mapping dictionary.
+    It optimizes performance by using NumPy's vectorized operations and pre-generating values.
+
+    This is a generic helper function that can be used in various scenarios where you need to map
+    parent categories to child values, such as:
+    - Generating industries based on verticals (as in company.py)
+    - Generating interaction types based on channels (as in interactions.py)
+    - Any other case where you have a parent-child relationship defined by a mapping dictionary
+
+    :param parent_values: List of parent category values (e.g., channels, verticals)
+    :param mapping_dict: Dictionary mapping parent categories to lists of possible child values
+    :param fallback_values: Values to use when a parent category is not in the mapping dictionary
+    :returns: List of child values corresponding to each parent category
+
+    Performance optimizations:
+    - Uses NumPy's vectorized operations for better performance with large datasets
+    - Pre-generates and reuses values instead of generating them on-demand
+    - Minimizes individual random calls
+    - Efficiently handles large datasets by batching operations
+
+    Example usage:
+    ```python
+    # Generate industries based on verticals
+    industries = generate_mapped_values(
+        parent_values=verticals,
+        mapping_dict=VERTICALS_TO_INDUSTRIES
+    )
+
+    # Generate interaction types based on channels with fallback values
+    interaction_types = generate_mapped_values(
+        parent_values=channels,
+        mapping_dict=CHANNEL_INTERACTION_TYPES,
+        fallback_values=FALLBACK_INTERACTION_TYPES
+    )
+    ```
+    """
+    # If no parent values, return empty list
+    if not parent_values:
+        return []
+
+    # If mapping_dict is empty and no fallback, return None for each parent
+    if not mapping_dict and fallback_values is None:
+        return [None] * len(parent_values)
+
+    # Pre-generate child values for each parent category
+    child_map: dict[str, list[Any]] = {}
+    n_values = len(parent_values)
+
+    for parent, child_values in mapping_dict.items():
+        if not child_values:
+            # Skip empty child value lists
+            continue
+
+        # For each parent, randomly select child values using vectorized operations
+        # Generate enough values to handle the worst case where all parents are the same
+        n_values = len(parent_values)
+        indices = _rng.integers(0, len(child_values), size=n_values)
+        child_map[parent] = [child_values[i] for i in indices]
+
+    # Map each parent to its pre-generated child value
+    result: list[Any] = []
+    parent_counts: dict[str, int] = {}
+
+    for parent in parent_values:
+        # Keep track of how many times we've seen this parent
+        parent_counts[parent] = parent_counts.get(parent, 0) + 1
+        count = parent_counts[parent]
+
+        if child_map.get(parent):
+            # Use modulo to cycle through the pre-generated child values if needed
+            result.append(child_map[parent][(count - 1) % len(parent_values)])
+        elif fallback_values:
+            # Use fallback values if provided
+            idx = _rng.integers(0, len(fallback_values))
+            result.append(fallback_values[idx])
+        else:
+            # No mapping and no fallback
+            result.append(None)
+
+    return result
 
 
 def generate_source_id_mappings(

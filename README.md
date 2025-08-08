@@ -1,17 +1,43 @@
-# Client Project Name
+# BT Attribution Mock Data Generator
 
 ## Overview
-*Replace this with a concise description of the project and the problem it solves.*
+A comprehensive mock data generator for BT marketing attribution analysis. This tool creates realistic, interconnected datasets that model marketing attribution relationships, customer interactions, and sales data for testing and development purposes.
 
-### Quick Start Examples
-The project includes several quickstart examples to help you get started:
+The generator produces CSV files with consistent relationships between entities such as companies, people, marketing campaigns, interactions, and orders - allowing for realistic attribution modeling and analysis.
 
-- **Snowflake Connect and SQL**: [Link](quickstarts/snowflake_quickstart.py)
-- **Marketo API Requests**: [Link](quickstarts/marketo_api_quickstart.py)
+## Quick Start
 
-*Related Workfront tasks:*
-- *WF-12345: Initial project setup*
-- *WF-12346: Feature implementation*
+### Installation
+1. Clone the repository
+2. Install dependencies with Poetry:
+   ```
+   poetry install
+   pre-commit install
+   ```
+
+### Running the Generator
+To generate a complete set of mock data:
+
+```bash
+python main.py
+```
+
+This will:
+1. Read the structure definition from the Excel file in `data/input/`
+2. Generate all required datasets in the correct order
+3. Save CSV files to the `mock_output/` directory
+
+### Quickstart Example
+The project includes a quickstart example to help you get started:
+
+```bash
+python quickstarts/mock_data_quickstart.py
+```
+
+This example:
+- Generates a smaller set of mock data for faster execution
+- Performs basic analysis on the attribution data
+- Shows how to use the generated data programmatically
 
 ## Project Setup
 
@@ -47,24 +73,93 @@ The project includes several quickstart examples to help you get started:
 The project follows a modular structure with clear separation of concerns:
 
 ```
-project-root/
+bt-attribution-mock-data/
 ├── config_example.py           # Template for configuration settings
 ├── data/                       # Data files and resources
+│   └── input/                  # Input files defining data structure
 ├── filepaths.py                # File path definitions
 ├── gitlab_prep/                # GitLab CI/CD related scripts
 ├── main.py                     # Main entry point for the application
-├── quickstarts/                # Example code for quick starts
-├── snowflake/                  # Snowflake SQL files and resources
-│   ├── snowflake_setup/        # Schema setup scripts
-│   ├── snowflake_static_files/ # Static data files for Snowflake
-│   └── snowflake_views/        # SQL view definitions
+├── mock_output/                # Generated CSV output files
 ├── src/                        # Source code
-│   └── example_group/         # Functional modules
+│   ├── generators/             # Data generator modules
+│   ├── config_loader.py        # Configuration loading utilities
+│   ├── orchestrator.py         # Coordinates the data generation process
+│   ├── random_utils.py         # Utilities for random data generation
+│   ├── schema_registry.py      # Manages schema definitions
+│   └── validation.py           # Data validation utilities
 └── testing/                    # Test files mirroring the src structure
 ```
 
+## Generated Datasets
+The generator produces the following CSV files in the `mock_output/` directory:
+
+| File | Description |
+|------|-------------|
+| Attribution Linking Table.csv | Links between marketing activities and outcomes |
+| Audience.csv | Target audience definitions |
+| Campaigns.csv | Marketing campaign details |
+| Channels.csv | Marketing channels (email, social, etc.) |
+| Company.csv | Company/account information |
+| Date Dimension.csv | Date reference data |
+| Facilitation Tool.csv | Tools used in marketing activities |
+| Interactions.csv | Customer interactions with marketing assets |
+| Marketing Activity.csv | Marketing activities and events |
+| Marketing Assets.csv | Marketing content and assets |
+| Orders.csv | Sales orders and transactions |
+| Person Company Role.csv | Relationships between people and companies |
+| Person.csv | Individual contact information |
+| Products.csv | Product catalog information |
+
+## Data Generation Process
+The data generation follows a specific order to maintain referential integrity:
+
+1. Base entities (Companies, People, Products, etc.) are generated first
+2. Relationship entities (Person-Company roles, etc.) are generated next
+3. Marketing entities (Campaigns, Assets, Activities) follow
+4. Interaction data is generated based on the marketing entities
+5. Orders and attribution data are generated last, referencing all previous entities
+
+Each generator maintains relationships with previously generated entities to ensure data consistency.
+
+## Performance Considerations
+The generator is optimized for performance when creating large datasets:
+
+### Vectorized Operations
+- Uses NumPy's vectorized random operations instead of individual random calls
+- Generates batches of random values at once rather than in loops
+- Pre-generates and reuses values where appropriate
+
+### Memory Efficiency
+- Limits the generation of expensive objects (like Faker instances)
+- Uses sampling pools for frequently accessed random values
+- Optimizes data structures to reduce memory usage during generation
+
+### Tips for Large Datasets
+- For very large datasets (>100,000 rows), consider generating in smaller batches
+- Monitor memory usage when generating extremely large datasets
+- The first few objects (especially Company and Person) may take longer to generate due to their role as foundation entities
+
+### Performance Optimizations
+The code includes several specific optimizations:
+- Vectorized random sampling in `make_ids_with_duplicates`
+- Pre-generation of industry mappings in the company generator
+- Limited pool of locations to reduce expensive Faker calls
+- Efficient handling of None values in ID generation
+
 ## Usage
-*Add instructions on how to use the project here.*
+To generate mock data, simply run the main script:
+
+```bash
+python main.py
+```
+
+The script will:
+1. Load the structure definition from the Excel file in the data/input directory
+2. Generate all datasets in the correct order to maintain relationships
+3. Write CSV files to the mock_output directory
+
+You can modify the generation parameters by editing the Excel structure file.
 
 ## CI/CD Pipeline
 The project includes a GitLab CI/CD pipeline that automates code quality checks, testing, and deployment. The pipeline includes:

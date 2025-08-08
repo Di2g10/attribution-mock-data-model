@@ -1,7 +1,7 @@
 [tool.poetry]
-# update this to the name of the project!
-name = "basic_template"
+name = "bt-attribution-mock-data"
 version = "0.1.0"
+description = "Mock data generator for BT marketing attribution analysis"
 readme = "README.md"
 
 # set this to true if this is a package which will be built and imported by other projects

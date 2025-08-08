@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import polars as pl
 
-from ..random_utils import fake, make_ids, random_date, weighted_sample
+from ..random_utils import fake, generate_mapped_values, make_ids, random_date, weighted_sample
 
 __all__ = [
     "create_interactions_dataframe",
@@ -186,18 +186,17 @@ def generate_interaction_types(
     :param channels: List of channel names
     :param channel_interaction_types: Dictionary mapping channel names to lists of interaction types
     :returns: List of interaction types
-    """
-    interaction_types = []
-    for channel in channels:
-        # Get interaction types for this channel
-        channel_types = channel_interaction_types.get(channel, FALLBACK_INTERACTION_TYPES)
-        # If no interaction types for this channel, use fallback
-        if not channel_types:
-            channel_types = FALLBACK_INTERACTION_TYPES
-        # Randomly select an interaction type for this channel
-        interaction_types.append(fake.random_element(channel_types))
 
-    return interaction_types
+    This function uses the generate_mapped_values helper for efficient mapping and
+    performance optimization, especially for large datasets.
+    """
+    # Use the generate_mapped_values helper function to efficiently map channels to interaction types
+    # This provides better performance through vectorized operations and pre-generation of values
+    return generate_mapped_values(
+        parent_values=channels,
+        mapping_dict=channel_interaction_types,
+        fallback_values=FALLBACK_INTERACTION_TYPES,
+    )
 
 
 @dataclass
