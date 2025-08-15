@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, List, Optional
 
 import polars as pl
 
@@ -96,14 +96,19 @@ def generate_audience_criteria_descriptions(n: int) -> List[str]:
     return descriptions
 
 
-def generate_audience_criteria_technical(n: int) -> List[str]:
+def generate_audience_criteria_technical(
+    n: int, null_rate: Optional[float] = 0.0
+) -> List[Optional[str]]:
     """Generate technical criteria for audiences.
 
     :param n: Number of technical criteria to generate
     :returns: List of technical criteria
     """
-    technical_criteria = []
+    technical_criteria: List[Optional[str]] = []
     for _ in range(n):
+        if fake.boolean(chance_of_getting_true=null_rate):
+            technical_criteria.append(None)
+            continue
         # Generate a SQL-like query string
         industry = fake.random_element(
             ["Healthcare", "Financial", "Retail", "Manufacturing", "Technology"]
@@ -178,7 +183,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     criteria_descriptions = generate_audience_criteria_descriptions(n)
 
     # Generate audience technical criteria
-    criteria_technical = generate_audience_criteria_technical(n)
+    criteria_technical = generate_audience_criteria_technical(n, null_rate=0.2)
 
     # Generate propensity models
     propensity_models = generate_propensity_models(n)
