@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, List, Mapping
 
 import polars as pl
 
@@ -165,12 +165,19 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     :returns: DataFrame containing generated marketing assets data
     """
     # Extract prior data if available
-    prior = kwargs.get("prior", {})
+    prior = kwargs.get("prior")
+
+    if not isinstance(prior, Mapping) or "Products" not in prior:
+        raise ValueError("Missing product data")
 
     # Extract product IDs if available
-    product_df = prior.get("Products", None)
-    if product_df is None:
-        raise ValueError("Missing product data")
+    product_df = prior.get("Products")
+
+    if not isinstance(product_df, pl.DataFrame):
+        raise ValueError("Invalid product data")
+
+    # pycharm claims uncreachable from here.
+
     if "product_id" not in product_df.columns:
         raise ValueError("No product_id column in product data")
 
