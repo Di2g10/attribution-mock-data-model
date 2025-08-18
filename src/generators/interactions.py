@@ -157,6 +157,11 @@ def get_channel_data_from_registry(registry: Any) -> Tuple[Dict[str, List[str]],
                         ]
                         if interaction_types:
                             channel_interaction_types[channel] = interaction_types
+
+            # Ensure every channel from the spreadsheet has a mapping; if missing, use fallback types
+            for channel in channel_names:
+                if channel not in channel_interaction_types:
+                    channel_interaction_types[channel] = FALLBACK_INTERACTION_TYPES[:]
     except Exception as e:
         # If there's an error, use the defaults
         print(f"Error loading channels and interaction types: {e}")
@@ -464,6 +469,9 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # --- 5. Add remaining columns (channel, type, metadata) ---
     channel_map, channel_weights = get_channel_data_from_registry(registry)
     channels = generate_channels(n, channel_weights)
+    # Normalise channel synonyms to canonical names expected by design/defaults
+    _channel_canonical = {"Online Chat": "Chat"}
+    channels = [_channel_canonical.get(ch, ch) for ch in channels]
     interaction_types = generate_interaction_types(channels, channel_map)
 
     sampled_df = sampled_df.with_columns(

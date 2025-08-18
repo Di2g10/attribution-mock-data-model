@@ -7,7 +7,7 @@ from typing import Dict
 import polars as pl
 
 from src.generators.interactions import (
-    generate,
+    generate as generate_interactions,
     DEFAULT_CHANNEL_INTERACTION_TYPES,
 )
 from src.config_loader import Config
@@ -52,7 +52,7 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
 
 def test_interactions_unique_ids() -> None:
     """Test that generated interaction IDs are unique."""
-    df = generate(LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities())
+    df = generate_interactions(LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities())
     ids = df.select("interaction_id").to_series()
     assert ids.is_unique().all(), "interaction_id values should be unique"
     assert df.height == LARGE_SAMPLE_SIZE
@@ -62,7 +62,7 @@ def test_interactions_with_related_objects() -> None:
     """Test that interactions correctly relate to persons, companies, and activities."""
     # Arrange: load mock prior data with companies, persons, and push activities
     prior = minimal_prior_with_activities()
-    df = generate(LARGE_SAMPLE_SIZE, prior=prior, keep_channel=True)
+    df = generate_interactions(LARGE_SAMPLE_SIZE, prior=prior, keep_channel=True)
 
     assert df.height == LARGE_SAMPLE_SIZE
     assert "interaction_id" in df.columns
@@ -207,7 +207,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
 
         # Generate interactions using the registry; include channel for validation.
         # We pass `prior` to satisfy the generator's requirement for activity linkage.
-        df = generate(
+        df = generate_interactions(
             LARGE_SAMPLE_SIZE,
             registry=self.registry,
             prior=self.prior,
@@ -245,7 +245,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         interacted_person_id == activity.targeted_person_id
         interacted_company_id == activity.targeted_company_id
         """
-        df = generate(
+        df = generate_interactions(
             LARGE_SAMPLE_SIZE,
             registry=self.registry,
             prior=self.prior,

@@ -235,6 +235,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # registry/prior unused ye
     return pl.DataFrame(
         {
             "company_id": ids,
+            "name": fake.company(),
             "industry": industries,
             "Owner_ID": make_ids_with_duplicates(owner_ids, n),
             "Parent_Company_ID": make_ids_with_duplicates(ids, n, 0.8),

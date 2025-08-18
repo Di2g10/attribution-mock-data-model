@@ -3,11 +3,97 @@
 import unittest
 import polars as pl
 
-from src.generators.attribution_linking_table import _create_ancestry, _build_links
+from src.generators.attribution_linking_table import (
+    _create_ancestry,
+    _build_links,
+    _best_product_yca_level,
+)
 
 
 # import the function you just wrote
 # from my_module.hierarchy import create_ancestory   # ⇦ adjust as needed
+
+
+class TestBestProductYCA(unittest.TestCase):
+    """Tests for _best_product_yca_level over a tiny product hierarchy."""
+
+    def setUp(self) -> None:
+        """Create a small product hierarchy for testing."""
+        # Build a 3-level product tree:
+        #   P1 (Tier 1)
+        #   ├─ P2 (Tier 2)
+        #   │    └─ P4 (Tier 3)
+        #   └─ P3 (Tier 2)
+        self.products = pl.DataFrame(
+            {
+                "product_id": ["P1", "P2", "P3", "P4"],
+                "product_parent_id": [None, "P1", "P1", "P2"],
+                "level": ["Tier 1", "Tier 2", "Tier 2", "Tier 3"],
+            }
+        )
+        closure = _create_ancestry(
+            self.products, row_id="product_id", parent_id="product_parent_id"
+        )
+        self.links = _build_links(closure)
+
+    def test_prefers_closest_campaign(self) -> None:
+        """When campaign is closer, use it."""
+        # outcome P4, campaign P2 (closest common ancestor P2 => Tier 2), asset P3 (YCA P1 => Tier 1)
+        rows = pl.DataFrame(
+            {
+                "outcome_product_id": ["P4"],
+                "campaign_product_id": ["P2"],
+                "asset_product_id": ["P3"],
+            }
+        )
+        result = _best_product_yca_level(
+            rows,
+            self.links,
+            self.products,
+            outcome_col="outcome_product_id",
+            campaign_col="campaign_product_id",
+            asset_col="asset_product_id",
+        )
+        self.assertEqual(result.item(), "Tier 2")
+
+    def test_uses_asset_when_better_or_only(self) -> None:
+        """When asset is better or only, use it."""
+        # outcome P4, campaign P3 (YCA P1 => Tier 1, degrees 3), asset P2 (YCA P2 => Tier 2, degrees 1)
+        rows = pl.DataFrame(
+            {
+                "outcome_product_id": ["P4"],
+                "campaign_product_id": ["P3"],
+                "asset_product_id": ["P2"],
+            }
+        )
+        result = _best_product_yca_level(
+            rows,
+            self.links,
+            self.products,
+            outcome_col="outcome_product_id",
+            campaign_col="campaign_product_id",
+            asset_col="asset_product_id",
+        )
+        self.assertEqual(result.item(), "Tier 2")
+
+    def test_null_when_no_ids(self) -> None:
+        """When all IDs are null, return None."""
+        rows = pl.DataFrame(
+            {
+                "outcome_product_id": [None],
+                "campaign_product_id": [None],
+                "asset_product_id": [None],
+            }
+        )
+        result = _best_product_yca_level(
+            rows,
+            self.links,
+            self.products,
+            outcome_col="outcome_product_id",
+            campaign_col="campaign_product_id",
+            asset_col="asset_product_id",
+        )
+        self.assertIsNone(result.item())
 
 
 class TestCreateAncestory(unittest.TestCase):
