@@ -239,7 +239,7 @@ def _require_df(value: Any, name: str) -> pl.DataFrame:
     return value
 
 
-def generate(n: int, **kwargs: Any) -> pl.DataFrame:
+def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa PLR0915
     """Generate the attribution linking table deterministically from existing data.
 
     The function builds links via Interaction -> Person -> Company -> Order,
@@ -364,15 +364,20 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             campaign_col="campaign_product_id",
             asset_col="asset_product_id",
         )
-        company_yca_type = _best_company_yca_type(
-            rows,
-            company_links,
-            company_df,
-            outcome_company_col="outcome_company_id",
-            activity_company_col="activity_company_id",
-        )
+        rows = rows.with_columns(product_yca_tier)
 
-        enriched = rows.with_columns([product_yca_tier, company_yca_type])
+        # only compute company_yca_type if it wasn't already produced upstream
+        if "company_yca_type" not in rows.columns:
+            company_yca_type = _best_company_yca_type(
+                rows,
+                company_links,
+                company_df,
+                outcome_company_col="outcome_company_id",
+                activity_company_col="activity_company_id",
+            )
+            rows = rows.with_columns(company_yca_type)
+
+        enriched = rows
     else:
         # No enrichment possible: add null columns to satisfy schema
         enriched = filtered_links.with_columns(
@@ -432,6 +437,14 @@ def _generate_links_though_person_company(
     df = df.join(company_links, left_on="company_id", right_on="from_id", how="inner")
     links_raw = df.join(order_df, left_on="to_id", right_on="company_id", how="inner")
 
+    # --- NEW: compute company_yca_type at build time ---
+    comp_bt = company_df.select(["company_id", "Company Business Type"]).rename(
+        {"company_id": "_anc_id", "Company Business Type": "_anc_bt"}
+    )
+    links_raw = links_raw.join(
+        comp_bt, left_on="ancestor_id", right_on="_anc_id", how="left"
+    ).with_columns(pl.col("_anc_bt").alias("company_yca_type"))
+    links_raw = links_raw.drop("_anc_bt")
     n = links_raw.height
     schema = _define_schema()
     if n == 0:
