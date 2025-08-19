@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from datetime import timedelta
 
 import polars as pl
 
@@ -19,7 +18,7 @@ DUMMY_END_DATE_PROBABILITY = 0.8  # 80% chance of having an end date
 
 def _create_person_company_relationships(
     person_df: Optional[pl.DataFrame], company_df: Optional[pl.DataFrame], n: int
-) -> List[Dict[str, Any]]:
+) -> pl.DataFrame:
     """Create relationships between people and companies.
 
     :param person_df: DataFrame containing person data
@@ -43,75 +42,57 @@ def _create_person_company_relationships(
     if not person_ids or not company_ids:
         return relationships
 
-    # Track active roles for each person to ensure most people have only one active role at a time
-    person_active_roles: Dict[str, List[Dict[str, Any]]] = {}
+    # Create a df from all person_ids
+    df = pl.DataFrame({"person_id": person_ids})
+    # assign each row a random company_id
+    df = df.with_columns(
+        pl.Series(
+            "company_id",
+            fake.random_elements(elements=company_ids, length=len(person_ids), unique=False),
+        )
+    )
+    # give each row a random roletype
+    df = df.with_columns(
+        pl.Series(
+            "roletype",
+            weighted_sample(
+                ["Primary", "Secondary", "Influencer", "Decision Maker", "End User"],
+                n=len(person_ids),
+            ),
+        )
+    )
+    # give each row a random start_date
+    df = df.with_columns(pl.Series("start_date", [random_date() for _ in range(len(person_ids))]))
+    # give a random subset a duration then calculate the end_date
 
-    # Generate n relationships
-    for _ in range(n):
-        # Select a random person and company
-        person_id = fake.random.choice(person_ids)
-        company_id = fake.random.choice(company_ids)
+    df = df.with_columns(
+        pl.Series(
+            "week_duration",
+            [
+                (
+                    fake.random_int(min=1, max=156)
+                    if fake.random.random() < END_DATE_PROBABILITY
+                    else None
+                )
+                for _ in range(len(person_ids))
+            ],
+        )
+    )
+    # calcualte end date from start date = duration
+    df = df.with_columns(
+        pl.when(pl.col("week_duration") is not None)
+        .then(pl.col("start_date") + pl.duration(weeks=pl.col("week_duration")))
+        .otherwise(None)
+        .alias("end_date")
+    )
 
-        # Generate start and end dates
-        start_date = random_date()
-
-        # Determine if role has an end date (to allow for some current roles)
-        has_end_date = fake.random.random() < END_DATE_PROBABILITY
-
-        # End date is between 1 month and 2 years after start date
-        end_date = None
-        if has_end_date:
-            days_active = fake.random_int(min=30, max=730)  # Between 1 month and 2 years
-            end_date = start_date + timedelta(days=days_active)
-
-        # Create the relationship
-        relationship = {
-            "person_id": person_id,
-            "company_id": company_id,
-            "roletype": weighted_sample(
-                ["Primary", "Secondary", "Influencer", "Decision Maker", "End User"]
-            )[0],
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-
-        # Check for overlapping active roles for this person
-        if person_id not in person_active_roles:
-            person_active_roles[person_id] = []
-
-        # If this person already has active roles, chance to end previous roles
-        # before this one starts (to ensure most people have only one active role at a time)
-        if person_active_roles[person_id] and fake.random.random() < END_PREVIOUS_ROLES_PROBABILITY:
-            for active_role in person_active_roles[person_id]:
-                # If the active role doesn't have an end date, give it one
-                if active_role["end_date"] is None:
-                    # End date is before the new role starts but after the active role's start date
-                    active_role_start = active_role["start_date"]
-                    # Calculate the maximum number of days before the new role starts
-                    # that we can set the end date to, ensuring it's after the active role's start date
-                    max_days_before = min(30, (start_date - active_role_start).days - 1)
-
-                    # If there's not enough time between the active role's start date and the new role's start date,
-                    # set the end date to be 1 day after the active role's start date
-                    if max_days_before < 1:
-                        active_role["end_date"] = active_role_start + timedelta(days=1)
-                    else:
-                        days_before = fake.random_int(min=1, max=max_days_before)
-                        active_role["end_date"] = start_date - timedelta(days=days_before)
-
-        # Add this relationship to the person's active roles
-        person_active_roles[person_id].append(relationship)
-
-        # Add the relationship to our list
-        relationships.append(relationship)
-
-    return relationships
+    return df.drop("week_duration")
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of person-company role data.
 
-    :param n: Number of person-company role relationships to generate
+    :param n: Not Used Here
     :param kwargs: Additional keyword arguments
         - prior: Dictionary of previously generated DataFrames
     :returns: DataFrame containing generated person-company role data
@@ -127,16 +108,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     relationships = _create_person_company_relationships(person_df, company_df, n)
 
     # If we couldn't create relationships (no person or company data), create dummy data
-    if not relationships:
+    if relationships.height == 0:
         raise ValueError("No person-company relationships found")
 
     # Convert relationships to DataFrame
-    return pl.DataFrame(
-        {
-            "person_id": [r["person_id"] for r in relationships],
-            "company_id": [r["company_id"] for r in relationships],
-            "roletype": [r["roletype"] for r in relationships],
-            "start_date": [r["start_date"] for r in relationships],
-            "end_date": [r["end_date"] for r in relationships],
-        }
-    )
+    return relationships

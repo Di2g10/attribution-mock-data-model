@@ -421,19 +421,30 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ]
     )
 
-    # --- 2. Validate against Person Company Role if available ---
-    valid_roles = None
+    # --- 2. Prioritise Person Company Role for company derivation if available ---
     role_df = prior.get("Person Company Role")
     if role_df is not None and {"Person ID", "Company ID"}.issubset(role_df.columns):
-        valid_roles = role_df.select(
-            [
-                pl.col("Person ID").alias("interacted_person_id"),
-                pl.col("Company ID").alias("interacted_company_id"),
-            ]
-        ).unique()
+        # Build a deterministic person -> company map and prefer it over targeted_company_id
+        person_company_map = (
+            role_df.select(
+                [
+                    pl.col("Person ID").alias("interacted_person_id"),
+                    pl.col("Company ID").alias("_role_company_id"),
+                ]
+            )
+            .unique()
+            .group_by("interacted_person_id")
+            .agg(pl.first("_role_company_id").alias("_role_company_id"))
+        )
 
-        activities_df = activities_df.join(
-            valid_roles, on=["interacted_person_id", "interacted_company_id"], how="inner"
+        activities_df = (
+            activities_df.join(person_company_map, on="interacted_person_id", how="left")
+            .with_columns(
+                pl.coalesce([pl.col("_role_company_id"), pl.col("interacted_company_id")]).alias(
+                    "interacted_company_id"
+                )
+            )
+            .drop("_role_company_id")
         )
 
     # --- 3. Sample activities for interaction base ---

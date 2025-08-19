@@ -111,7 +111,9 @@ class SchemaRegistry:
 
             # Should we check row count?
             generation_method = row.get(generation_method_col, "")
-            check_row_count = generation_method.lower() != "derived"
+            check_row_count = not (
+                generation_method.lower() == "derived" or name == "Person Company Role"
+            )
 
             # Determine row count, defaulting to 100 only if not specified
             rc_val = _first_present(row, row_count_cols)
