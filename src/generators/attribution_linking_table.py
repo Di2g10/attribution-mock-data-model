@@ -242,10 +242,14 @@ def _require_df(value: Any, name: str) -> pl.DataFrame:
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa PLR0915
     """Generate the attribution linking table deterministically from existing data.
 
-    The function builds links via Interaction -> Person -> Company -> Order,
-    filters by temporal order, and enriches with a product_yca_level column
-    representing the youngest common ancestor level between the outcome product
-    and the Campaign/Asset product associated to the originating activity.
+    The function builds links via multiple strategies in priority order:
+    1) Interaction -> Person -> Order (direct person match to order.contact_id)
+    2) Interaction -> Person -> Company -> Order (via company ancestry)
+    3) Interaction -> Company -> Order (when person unknown, via company ancestry)
+
+    It then filters by temporal order and enriches with product_yca_tier and
+    company_yca_type. Duplicates are resolved by keeping the highest-priority
+    relation for each (interaction_id, outcome_id) pair.
     """
     prior: dict[str, pl.DataFrame] = kwargs.get("prior", {})
 
@@ -255,12 +259,42 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa PLR0915
     order_df = _require_df(prior.get("Orders"), "Order")
     person_company_role_df = _require_df(prior.get("Person Company Role"), "Person Company Role")
 
+    # Build all link types
+    direct_person_links = _generate_links_direct_person(interaction_df, order_df)
     person_company_link_df = _generate_links_though_person_company(
         person_df, interaction_df, company_df, order_df, person_company_role_df
     )
-    # Generate other link objects e.g. Interaction -> Company, Interaction -> Order
+    company_only_links = _generate_links_company_only(interaction_df, company_df, order_df)
 
-    combined_links = person_company_link_df  # Concatentate these once others created
+    # Add a priority for deduplication: lower number = higher priority
+    def _with_priority(df: pl.DataFrame, prio: int) -> pl.DataFrame:
+        # Always add the helper priority column, even on empty frames, to ensure consistent width
+        return df.with_columns(pl.lit(prio).alias("_priority"))
+
+    stacked = (
+        pl.concat(
+            [
+                _with_priority(direct_person_links, 0),
+                _with_priority(person_company_link_df, 1),
+                _with_priority(company_only_links, 2),
+            ],
+            how="vertical",
+            rechunk=True,
+        )
+        if (
+            not direct_person_links.is_empty()
+            or not person_company_link_df.is_empty()
+            or not company_only_links.is_empty()
+        )
+        else _define_schema().with_columns(pl.lit(1).alias("_priority"))
+    )
+
+    # Deduplicate per (interaction_id, outcome_id) keeping highest priority then drop helper
+    combined_links = (
+        stacked.sort(["_priority"])
+        .unique(subset=["interaction_id", "outcome_id"], keep="first")
+        .drop("_priority")
+    )
 
     # Filter on dates and add date difference
     filtered_links = _date_difference_filter(combined_links, interaction_df, order_df)
@@ -437,7 +471,7 @@ def _generate_links_though_person_company(
     df = df.join(company_links, left_on="company_id", right_on="from_id", how="inner")
     links_raw = df.join(order_df, left_on="to_id", right_on="company_id", how="inner")
 
-    # --- NEW: compute company_yca_type at build time ---
+    # --- compute company_yca_type at build time (optional; enrichment can also compute) ---
     comp_bt = company_df.select(["company_id", "Company Business Type"]).rename(
         {"company_id": "_anc_id", "Company Business Type": "_anc_bt"}
     )
@@ -451,31 +485,170 @@ def _generate_links_though_person_company(
         # return an *empty* frame with the right dtypes so downstream code is safe
         return schema
 
-    links_calculated = (
-        links_raw
-        # 1. deterministic / generated fields
-        .with_columns(
-            pl.lit("Order").alias("outcome_type"),
-            pl.lit("Interaction-Person-Company-Order").alias("relation_type"),
-        ).rename(
-            {
-                "interaction_id": "interaction_id",
-                "order_id": "outcome_id",
-                "interacted_person_id": "person_id",
-            }
-        )  # no-op if already correct
+    links_calculated = links_raw.with_columns(
+        pl.lit("Order").alias("outcome_type"),
+        pl.lit("Interaction-Person-Company-Order").alias("relation_type"),
+    ).rename(
+        {
+            "interaction_id": "interaction_id",
+            "order_id": "outcome_id",
+            "interacted_person_id": "person_id",
+        }
     )
     return (
-        links_calculated.with_columns(  # add any missing columns with nulls
+        links_calculated.with_columns(
             [
                 pl.lit(None).cast(dt).alias(col)
                 for col, dt in _schema
                 if col not in links_calculated.columns
             ]
         )
-        # 3. final column order
         .select([col for col, _ in _schema])
-        # 4. cast to expected dtypes (optional but tidy)
+        .with_columns(
+            pl.col("time_lag").cast(pl.Int64),
+            pl.all().exclude("time_lag").cast(pl.String),
+        )
+    )
+
+
+def _generate_links_direct_person(
+    interaction_df: pl.DataFrame,
+    order_df: pl.DataFrame,
+) -> pl.DataFrame:
+    """Generate Interaction -> Person -> Order links when order.contact_id matches interaction person.
+
+    :param interaction_df: Interactions table (requires interacted_person_id and interaction_id)
+    :param order_df: Orders table (requires contact_id, order_id, company_id)
+    :returns: Links dataframe aligned to the link schema (without time_lag and IDs)
+    :raises ValueError: If required columns are missing.
+    """
+    required_i = {"interaction_id", "interacted_person_id"}
+    required_o = {"order_id", "contact_id", "company_id"}
+    if not required_i.issubset(interaction_df.columns):  # pragma: no cover
+        raise ValueError("Interactions missing required columns for direct person linking")
+    if not required_o.issubset(order_df.columns):  # pragma: no cover
+        raise ValueError("Orders missing required columns for direct person linking")
+
+    df = (
+        interaction_df.filter(pl.col("interacted_person_id").is_not_null())
+        .join(
+            order_df.select(["order_id", "contact_id", "company_id"]),
+            left_on="interacted_person_id",
+            right_on="contact_id",
+            how="inner",
+        )
+        .with_columns(
+            pl.lit("Order").alias("outcome_type"),
+            pl.lit("Interaction-Person-Order").alias("relation_type"),
+        )
+        .rename(
+            {
+                "interaction_id": "interaction_id",
+                "order_id": "outcome_id",
+                "interacted_person_id": "person_id",
+                # keep company_id from Orders join
+            }
+        )
+        .select(
+            [
+                col
+                for col, _ in _schema
+                if col
+                in (
+                    "interaction_id",
+                    "outcome_type",
+                    "outcome_id",
+                    "company_id",
+                    "person_id",
+                    "relation_type",
+                )
+            ]
+        )
+    )
+
+    if df.is_empty():
+        return _define_schema()
+
+    # Add any missing columns as nulls and cast types
+    return (
+        df.with_columns(
+            [pl.lit(None).cast(dt).alias(col) for col, dt in _schema if col not in df.columns]
+        )
+        .select([name for name, _ in _schema])
+        .with_columns(
+            pl.col("time_lag").cast(pl.Int64),
+            pl.all().exclude("time_lag").cast(pl.String),
+        )
+    )
+
+
+essential_company_cols = ["company_id", "Parent_Company_ID", "Company Business Type"]
+
+
+def _generate_links_company_only(
+    interaction_df: pl.DataFrame,
+    company_df: pl.DataFrame,
+    order_df: pl.DataFrame,
+) -> pl.DataFrame:
+    """Generate Interaction -> Company -> Order links for interactions with unknown person.
+
+    :param interaction_df: Interactions table (requires interacted_company_id, interaction_id, interacted_person_id)
+    :param company_df: Companies table (requires company_id and parent)
+    :param order_df: Orders table (requires company_id)
+    :returns: Links dataframe with person_id null and relation_type "Interaction-Company-Order".
+    """
+    # Only consider interactions where person is unknown but company is known
+    base = interaction_df.filter(
+        pl.col("interacted_person_id").is_null() & pl.col("interacted_company_id").is_not_null()
+    )
+    if base.is_empty():
+        return _define_schema()
+
+    # Build company links once
+    comp_closure = _create_ancestry(company_df, row_id="company_id", parent_id="Parent_Company_ID")
+    comp_links = _build_links(comp_closure)
+
+    # Join interaction company to orders via ancestry links
+    df = (
+        base.join(comp_links, left_on="interacted_company_id", right_on="from_id", how="inner")
+        .join(
+            order_df.select(
+                [
+                    "order_id",
+                    "contact_id",
+                    "product_id",
+                    "date_raised",
+                    "company_id",
+                ]
+            ),
+            left_on="to_id",
+            right_on="company_id",
+            how="inner",
+        )
+        .with_columns(
+            pl.lit("Order").alias("outcome_type"),
+            pl.lit("Interaction-Company-Order").alias("relation_type"),
+        )
+        .rename({"order_id": "outcome_id"})
+    ).with_columns(pl.col("to_id").alias("company_id"))
+
+    # Keep schema-relevant columns; person_id null
+    df2 = df.select(
+        [
+            pl.col("interaction_id"),
+            pl.col("outcome_type"),
+            pl.col("outcome_id"),
+            pl.col("company_id"),  # from Orders
+            pl.lit(None).cast(pl.String).alias("person_id"),
+            pl.col("relation_type"),
+        ]
+    )
+
+    return (
+        df2.with_columns(
+            [pl.lit(None).cast(dt).alias(col) for col, dt in _schema if col not in df2.columns]
+        )
+        .select([name for name, _ in _schema])
         .with_columns(
             pl.col("time_lag").cast(pl.Int64),
             pl.all().exclude("time_lag").cast(pl.String),
