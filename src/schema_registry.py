@@ -56,6 +56,8 @@ class SchemaRegistry:
         "Interactions",
         "Orders",
         "Attribution Linking Table",
+        "Attribution Model",
+        "Attribution Model Output Table",
         "Date Dimension",
     ]
 
@@ -117,13 +119,23 @@ class SchemaRegistry:
 
             # Determine row count, defaulting to 100 only if not specified
             rc_val = _first_present(row, row_count_cols)
+            require_min_one = False
+            if isinstance(rc_val, str) and rc_val.strip().lower() == "dependant":
+                # For dependant objects, do not enforce exact count; require at least one row.
+                check_row_count = False
+                require_min_one = True
             row_count = _coerce_int(rc_val, default=100)
             # If someone explicitly put 0, keep a sensible minimum of 1 or default?
             # Preserve existing behaviour: when 0/empty, default 100.
             if row_count <= 0:
                 row_count = 100
 
-            parsed[name] = {"row_count": row_count, "meta": row, "check_count": check_row_count}
+            parsed[name] = {
+                "row_count": row_count,
+                "meta": row,
+                "check_count": check_row_count,
+                "require_min_one": require_min_one,
+            }
             order.append(name)
 
         # If no explicit generation_order provided, impose DEFAULT precedence
@@ -141,25 +153,27 @@ class SchemaRegistry:
         :param name: Object name as declared in the workbook.
         :param row_count: Row count to check against.
         :raises KeyError: If the object name is not present.
-        :returns: True if row_count needs checking and matches expected_row_count.
+        :returns: True if the row count passes validation for this object.
         """
         if name not in self._objects:
             raise KeyError(f"Object '{name}' not found in workbook.")
-        if not self._objects[name]["check_count"]:
-            return self._objects[name]["row_count"] > 0
-        return row_count == self._objects[name]["row_count"]
+        obj = self._objects[name]
+        if not obj["check_count"]:
+            # When exact checking is disabled, optionally require at least one row
+            if obj.get("require_min_one"):
+                return row_count >= 1
+            return obj["row_count"] > 0
+        return row_count == obj["row_count"]
 
     def row_count(self, name: str) -> int:
-        """Return the row count for the given object name.
+        """Return the configured row count for the given object name.
 
         :param name: Object name as declared in the workbook.
         :raises KeyError: If the object name is not present.
-        :returns: Integer row count for the object.
+        :returns: Integer row count for the object, as parsed from the workbook.
         """
         if name not in self._objects:
             raise KeyError(f"Object '{name}' not found in workbook.")
-        if not self._objects[name]["check_count"]:
-            return True
         return self._objects[name]["row_count"]
 
     # ------------------------------------------------------------------

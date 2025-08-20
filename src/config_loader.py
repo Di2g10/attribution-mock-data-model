@@ -28,6 +28,14 @@ class Config:
             return self._cache[name]
         try:
             pdf = pd.read_excel(self.workbook, sheet_name=name)
+            # Workaround for mixed-type columns in 'objects' sheet (e.g., numeric & 'Dependant')
+            if str(name).strip().lower() == "objects":
+                for col in list(pdf.columns):
+                    if str(col).strip().lower().replace(" ", "_") in {
+                        "generate_rows",
+                        "generate_rows?",
+                    }:
+                        pdf[col] = pdf[col].astype(str)
             df = pl.from_pandas(pdf).fill_null("")
         except ValueError:
             if not missing_ok:
