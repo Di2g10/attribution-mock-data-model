@@ -514,4 +514,48 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ]
     )
 
+    # For IP-based identification, person may be unknown while company is known.
+    # Force interacted_person_id to None in those cases to enable company-only linkage downstream.
+    sampled_df = sampled_df.with_columns(
+        [
+            # mark whether this interaction is referenced by any follow-up
+            pl.col("interaction_id")
+            .is_in(sampled_df.select("followfrominteraction").drop_nulls().unique().to_series())
+            .alias("_is_referenced"),
+        ]
+    )
+
+    sampled_df = sampled_df.with_columns(
+        pl.when(
+            (pl.col("identificationmethod") == "IP Company Match")
+            & pl.col("followfrominteraction").is_null()
+            & (~pl.col("_is_referenced"))
+            & pl.col("interacted_company_id").is_null()
+        )
+        .then(pl.lit(None))
+        .otherwise(pl.col("interacted_person_id"))
+        .alias("interacted_person_id")
+    ).drop("_is_referenced")
+
+    # Ensure interacted_company_id is populated for IP Company Match rows
+    # If role/targeted company did not supply a company, fill from the Company table.
+    try:
+        company_ids_list = extract_id_column(prior.get("Company"), "company_id")
+    except Exception:
+        company_ids_list = []
+
+    if company_ids_list:
+        # Choose a single fallback company to keep None-person company mapping consistent across rows
+        fallback_company = fake.random.choice(company_ids_list)
+        sampled_df = sampled_df.with_columns(pl.lit(fallback_company).alias("_ip_fill_company"))
+        sampled_df = sampled_df.with_columns(
+            pl.when(
+                (pl.col("identificationmethod") == "IP Company Match")
+                & pl.col("interacted_company_id").is_null()
+            )
+            .then(pl.col("_ip_fill_company"))
+            .otherwise(pl.col("interacted_company_id"))
+            .alias("interacted_company_id")
+        ).drop("_ip_fill_company")
+
     return sampled_df if kwargs.get("keep_channel", False) else sampled_df.drop("channel")

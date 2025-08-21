@@ -63,8 +63,14 @@ def _create_person_company_relationships(
     )
     # give each row a random start_date
     df = df.with_columns(pl.Series("start_date", [random_date() for _ in range(len(person_ids))]))
+    # Randomly keep a fraction of assignments so some people have no roles (improves downstream consistency)
+    role_assignment_rate = 0.8
+    keep_mask = [fake.random.random() < role_assignment_rate for _ in range(len(person_ids))]
+    df = df.with_columns(pl.Series("_keep", keep_mask)).filter(pl.col("_keep")).drop("_keep")
     # give a random subset a duration then calculate the end_date
 
+    # Use current row count so lengths match after any filtering
+    current_n = df.height
     df = df.with_columns(
         pl.Series(
             "week_duration",
@@ -74,7 +80,7 @@ def _create_person_company_relationships(
                     if fake.random.random() < END_DATE_PROBABILITY
                     else None
                 )
-                for _ in range(len(person_ids))
+                for _ in range(current_n)
             ],
         )
     )

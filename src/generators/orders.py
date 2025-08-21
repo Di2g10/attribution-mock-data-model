@@ -513,7 +513,7 @@ def _select_contact_for_company(  # noqa: PLR0913, PLR0911
             ]
             if inter_filtered:
                 return fake.random.choice(inter_filtered)
-            # As a last resort when interactions exist, still enforce using interacted persons
+            # As a last resort when interactions exist, still select from interacted persons to satisfy consistency with interactions
             if inter_persons:
                 return fake.random.choice(inter_persons)
         # If no interactions, prefer role holders
@@ -522,13 +522,12 @@ def _select_contact_for_company(  # noqa: PLR0913, PLR0911
             if valid_persons:
                 return fake.random.choice(valid_persons)
 
-        # Fallback: any associated person, but prefer those with no roles or holding role at this company
+        # Fallback: any associated person, but enforce role constraint if the person has roles.
         valid_persons = company_person_map[company]
         filtered = [
             p
             for p in valid_persons
-            if (company in person_company_map.get(p, []))
-            or (len(person_company_map.get(p, [])) == 0)
+            if (p not in person_role_map) or (company in person_role_map[p])
         ]
         chosen_pool = (
             filtered
@@ -536,7 +535,7 @@ def _select_contact_for_company(  # noqa: PLR0913, PLR0911
             else (
                 role_based_company_person_map.get(company, [])
                 if role_based_company_person_map.get(company)
-                else valid_persons
+                else [p for p in valid_persons if p not in person_role_map]
             )
         )
         if chosen_pool:
