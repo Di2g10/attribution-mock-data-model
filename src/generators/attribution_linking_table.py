@@ -59,9 +59,12 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
     From a closure `[origin_id, ancestor_id, distance]`
     produce a **symmetric** link table `[from_id, to_id, ancestor_id, degrees]`
     that keeps only the shortest path between each unordered pair.
+
+    This implementation uses Polars lazy with streaming joins to reduce peak
+    memory during construction for large hierarchies.
     """
-    a = closure.rename({"origin_id": "node_a", "distance": "dist_a"})
-    b = closure.rename({"origin_id": "node_b", "distance": "dist_b"})
+    a = closure.lazy().rename({"origin_id": "node_a", "distance": "dist_a"})
+    b = closure.lazy().rename({"origin_id": "node_b", "distance": "dist_b"})
 
     links_raw = a.join(b, on="ancestor_id", how="inner").with_columns(
         (pl.col("dist_a") + pl.col("dist_b")).alias("degrees"),
@@ -76,7 +79,7 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
     links_min = (
         links_raw.sort("degrees")
         .unique(subset=["pair_key"], keep="first")
-        .select("node_a", "node_b", "ancestor_id", "degrees")
+        .select(["node_a", "node_b", "ancestor_id", "degrees"])
     )
 
     # make symmetric and align columns
@@ -84,10 +87,11 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
     # enforce identical column order before stacking
     wanted_cols = ["from_id", "to_id", "ancestor_id", "degrees"]
 
-    df1 = links_min.rename({"node_a": "from_id", "node_b": "to_id"}).select(wanted_cols)
-    df2 = links_min.rename({"node_a": "to_id", "node_b": "from_id"}).select(wanted_cols)
+    links_min_df = links_min.collect(streaming=True)
+    df1 = links_min_df.rename({"node_a": "from_id", "node_b": "to_id"}).select(wanted_cols)
+    df2 = links_min_df.rename({"node_a": "to_id", "node_b": "from_id"}).select(wanted_cols)
     # Remove any duplicated ordered pairs (e.g., self-pairs A==B would appear twice)
-    return pl.concat([df1, df2]).unique().sort(["from_id", "to_id"])
+    return pl.concat([df1, df2], how="vertical").unique().sort(["from_id", "to_id"])
 
 
 def _define_schema() -> pl.DataFrame:
@@ -239,7 +243,7 @@ def _require_df(value: Any, name: str) -> pl.DataFrame:
     return value
 
 
-def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa PLR0915
+def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate the attribution linking table deterministically from existing data.
 
     The function builds links via multiple strategies in priority order:
@@ -330,64 +334,69 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa PLR0915
         )
         company_links = _build_links(company_closure)
 
-        # Bring in product IDs and company IDs
-        # 1) outcome product and company via Orders
-        rows = filtered_links.join(
-            order_df.select(["order_id", "product_id", "company_id"]).rename(
-                {
-                    "order_id": "_outcome_id",
-                    "product_id": "outcome_product_id",
-                    "company_id": "outcome_company_id",
-                }
-            ),
-            left_on="outcome_id",
-            right_on="_outcome_id",
-            how="left",
-        )
-        # 2) add activity_id and interacted_company_id via Interactions
+        # Bring in product IDs and company IDs using a lazy, streaming pipeline
         rows = (
-            rows.join(
-                interaction_df.select(["interaction_id", "activity_id", "interacted_company_id"]),
+            filtered_links.lazy()
+            # 1) outcome product and company via Orders
+            .join(
+                order_df.select(["order_id", "product_id", "company_id"])
+                .rename(
+                    {
+                        "order_id": "_outcome_id",
+                        "product_id": "outcome_product_id",
+                        "company_id": "outcome_company_id",
+                    }
+                )
+                .lazy(),
+                left_on="outcome_id",
+                right_on="_outcome_id",
+                how="left",
+            )
+            # 2) add activity_id and interacted_company_id via Interactions
+            .join(
+                interaction_df.select(
+                    ["interaction_id", "activity_id", "interacted_company_id"]
+                ).lazy(),
                 on="interaction_id",
                 how="left",
                 suffix="_i",
-            )
-            .with_columns(
+            ).with_columns(
                 pl.coalesce([pl.col("activity_id_i"), pl.col("activity_id")]).alias("activity_id")
             )
-            .drop("activity_id_i")
-        )
-        # 3) campaign/asset and targeted_company_id via Marketing Activity
-        rows = rows.join(
-            marketing_activity_df.select(
-                ["id", "campaign_id", "marketing_asset_id", "targeted_company_id"]
-            ).rename({"id": "_activity_id"}),
-            left_on="activity_id",
-            right_on="_activity_id",
-            how="left",
-        )
-        # 4) campaign product
-        rows = rows.join(
-            campaigns_df.select(["campaign_id", "product_id"]).rename(
-                {"product_id": "campaign_product_id"}
-            ),
-            on="campaign_id",
-            how="left",
-        )
-        # 5) asset product
-        rows = rows.join(
-            assets_df.select(["marketing_asset_id", "product_id"]).rename(
-                {"product_id": "asset_product_id"}
-            ),
-            on="marketing_asset_id",
-            how="left",
-        )
-        # 6) derive activity_company_id with preference for targeted_company_id
-        rows = rows.with_columns(
-            pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
-                "activity_company_id"
+            # 3) campaign/asset and targeted_company_id via Marketing Activity
+            .join(
+                marketing_activity_df.select(
+                    ["id", "campaign_id", "marketing_asset_id", "targeted_company_id"]
+                )
+                .rename({"id": "_activity_id"})
+                .lazy(),
+                left_on="activity_id",
+                right_on="_activity_id",
+                how="left",
             )
-        )
+            # 4) campaign product
+            .join(
+                campaigns_df.select(["campaign_id", "product_id"])
+                .rename({"product_id": "campaign_product_id"})
+                .lazy(),
+                on="campaign_id",
+                how="left",
+            )
+            # 5) asset product
+            .join(
+                assets_df.select(["marketing_asset_id", "product_id"])
+                .rename({"product_id": "asset_product_id"})
+                .lazy(),
+                on="marketing_asset_id",
+                how="left",
+            )
+            # 6) derive activity_company_id with preference for targeted_company_id
+            .with_columns(
+                pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
+                    "activity_company_id"
+                )
+            )
+        ).collect(streaming=True)
 
         # Compute enrichments
         product_yca_tier = _best_product_yca_level(
@@ -458,27 +467,52 @@ def _generate_links_though_person_company(
     order_df: pl.DataFrame,
     person_company_role_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """Generate the links though person company."""
+    """Generate the links though person company.
+
+    Uses lazy pipelines with streaming joins and column pruning to reduce
+    peak memory on large datasets.
+    """
     company_ancestry = _create_ancestry(
         company_df, row_id="company_id", parent_id="Parent_Company_ID"
     )
     company_links = _build_links(company_ancestry)
 
-    df = interaction_df
-    df = df.join(
-        person_company_role_df, left_on="interacted_person_id", right_on="person_id", how="inner"
+    # Build pipeline lazily
+    i_cols = ["interaction_id", "interacted_person_id", "interacted_company_id"]
+    pcr_cols = ["person_id", "company_id"]
+    o_cols = ["order_id", "company_id"]
+
+    df_lazy = (
+        interaction_df.select(i_cols)
+        .lazy()
+        .join(
+            person_company_role_df.select(pcr_cols).lazy(),
+            left_on="interacted_person_id",
+            right_on="person_id",
+            how="inner",
+        )
+        .join(
+            company_links.lazy().select(["from_id", "to_id", "ancestor_id"]).rename({}),
+            left_on="interacted_company_id",
+            right_on="from_id",
+            how="inner",
+        )
+        .join(order_df.select(o_cols).lazy(), left_on="to_id", right_on="company_id", how="inner")
     )
-    df = df.join(company_links, left_on="company_id", right_on="from_id", how="inner")
-    links_raw = df.join(order_df, left_on="to_id", right_on="company_id", how="inner")
+
+    links_raw = df_lazy.collect(streaming=True)
 
     # --- compute company_yca_type at build time (optional; enrichment can also compute) ---
-    comp_bt = company_df.select(["company_id", "Company Business Type"]).rename(
-        {"company_id": "_anc_id", "Company Business Type": "_anc_bt"}
-    )
-    links_raw = links_raw.join(
-        comp_bt, left_on="ancestor_id", right_on="_anc_id", how="left"
-    ).with_columns(pl.col("_anc_bt").alias("company_yca_type"))
-    links_raw = links_raw.drop("_anc_bt")
+    if not links_raw.is_empty():
+        comp_bt = company_df.select(["company_id", "Company Business Type"]).rename(
+            {"company_id": "_anc_id", "Company Business Type": "_anc_bt"}
+        )
+        links_raw = (
+            links_raw.join(comp_bt, left_on="ancestor_id", right_on="_anc_id", how="left")
+            .with_columns(pl.col("_anc_bt").alias("company_yca_type"))
+            .drop("_anc_bt")
+        )
+
     n = links_raw.height
     schema = _define_schema()
     if n == 0:
@@ -592,6 +626,9 @@ def _generate_links_company_only(
 ) -> pl.DataFrame:
     """Generate Interaction -> Company -> Order links for interactions with unknown person.
 
+    Uses lazy pipelines with streaming joins and strict column selection to
+    limit memory when linking via company ancestry.
+
     :param interaction_df: Interactions table (requires interacted_company_id, interaction_id, interacted_person_id)
     :param company_df: Companies table (requires company_id and parent)
     :param order_df: Orders table (requires company_id)
@@ -608,29 +645,26 @@ def _generate_links_company_only(
     comp_closure = _create_ancestry(company_df, row_id="company_id", parent_id="Parent_Company_ID")
     comp_links = _build_links(comp_closure)
 
-    # Join interaction company to orders via ancestry links
-    df = (
-        base.join(comp_links, left_on="interacted_company_id", right_on="from_id", how="inner")
+    # Lazily join interaction company to orders via ancestry links
+    o_cols = ["order_id", "company_id"]
+    df_lazy = (
+        base.select(["interaction_id", "interacted_company_id"])
+        .lazy()
         .join(
-            order_df.select(
-                [
-                    "order_id",
-                    "contact_id",
-                    "product_id",
-                    "date_raised",
-                    "company_id",
-                ]
-            ),
-            left_on="to_id",
-            right_on="company_id",
+            comp_links.lazy().select(["from_id", "to_id"]),
+            left_on="interacted_company_id",
+            right_on="from_id",
             how="inner",
         )
+        .join(order_df.select(o_cols).lazy(), left_on="to_id", right_on="company_id", how="inner")
         .with_columns(
             pl.lit("Order").alias("outcome_type"),
             pl.lit("Interaction-Company-Order").alias("relation_type"),
         )
         .rename({"order_id": "outcome_id"})
-    ).with_columns(pl.col("to_id").alias("company_id"))
+    )
+
+    df = df_lazy.collect(streaming=True).with_columns(pl.col("to_id").alias("company_id"))
 
     # Keep schema-relevant columns; person_id null
     df2 = df.select(
@@ -659,15 +693,25 @@ def _generate_links_company_only(
 def _date_difference_filter(
     link: pl.DataFrame, interaction_df: pl.DataFrame, outcome_df: pl.DataFrame
 ) -> pl.DataFrame:
-    """Calculate the difference between activity and outcome & Filter interaction after outcome."""
+    """Calculate the difference between activity and outcome & Filter interaction after outcome.
+
+    Uses lazy streaming joins to reduce peak memory.
+    """
     # check we have the necessary interaction ID and outcome ID
     missing = [c for c in ("interaction_id", "outcome_id") if c not in link.columns]
     if missing:  # pragma: no cover
         raise ValueError(f"Required column(s) missing: {', '.join(missing)}")
 
-    return (
-        link.join(interaction_df, on="interaction_id", how="inner", suffix="_interaction")
-        .join(outcome_df, left_on="outcome_id", right_on="order_id", how="inner", suffix="_outcome")
+    lf = (
+        link.lazy()
+        .join(interaction_df.lazy(), on="interaction_id", how="inner", suffix="_interaction")
+        .join(
+            outcome_df.lazy(),
+            left_on="outcome_id",
+            right_on="order_id",
+            how="inner",
+            suffix="_outcome",
+        )
         .with_columns(
             (pl.col("date_raised") - pl.col("date")).alias("_lag"),
         )
@@ -683,3 +727,4 @@ def _date_difference_filter(
         # 3. final column order
         .select([name for name, _ in _schema])
     )
+    return lf.collect(streaming=True)
