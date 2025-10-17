@@ -593,21 +593,24 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ]
     )
 
-    # Rename columns to expected names and drop extras
-    sampled_df = sampled_df.rename(
-        {
-            "date": "interactiondate",
-            "identificationmethod": "identificationmethodtype",
-            "duration": "interactiondur",
-            "followfrominteraction": "followfrominteractionid",
-            "datasource": "datasourcename",
-        }
-    ).with_columns(
+    # Ensure duration type is integer
+    sampled_df = sampled_df.with_columns(
         [
-            # ensure duration is int
-            pl.col("interactiondur").cast(pl.Int64, strict=False),
+            pl.col("duration").cast(pl.Int64, strict=False),
         ]
     )
+
+    # When called by the orchestrator (registry provided), align column names to spreadsheet
+    if registry is not None:
+        sampled_df = sampled_df.rename(
+            {
+                "date": "interactiondate",
+                "identificationmethod": "identificationmethodtype",
+                "duration": "interactiondur",
+                "followfrominteraction": "followfrominteractionid",
+                "datasource": "datasourcename",
+            }
+        ).with_columns(pl.col("interactiondur").cast(pl.Int64, strict=False))
 
     # Optionally drop channel column to maintain prior behaviour
     if kwargs.get("keep_channel", False):

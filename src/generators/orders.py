@@ -513,9 +513,10 @@ def _select_contact_for_company(  # noqa: PLR0913, PLR0911
             ]
             if inter_filtered:
                 return fake.random.choice(inter_filtered)
-            # As a last resort when interactions exist, still select from interacted persons to satisfy consistency with interactions
-            if inter_persons:
-                return fake.random.choice(inter_persons)
+            # As a constrained last resort when interactions exist: select only interacted persons without conflicting roles
+            safe_interacted = [p for p in inter_persons if p not in person_role_map]
+            if safe_interacted:
+                return fake.random.choice(safe_interacted)
         # If no interactions, prefer role holders
         elif role_based_company_person_map.get(company):
             valid_persons = role_based_company_person_map[company]
