@@ -6,7 +6,7 @@ from typing import Any, List, Tuple
 
 import polars as pl
 
-from ..random_utils import fake, make_ids, _rng as rng
+from ..random_utils import fake, make_ids, _rng as rng, weighted_sample
 
 __all__ = ["generate"]
 
@@ -167,6 +167,7 @@ def generate_level1_products(
             "source_table": ["Product Catalog"] * level1_count,
             "source_id_field": ["product_id"] * level1_count,
             "source_id": [f"CAT{i:04d}" for i in range(1, level1_count + 1)],
+            "renewalrate": weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level1_count),
         }
     )
 
@@ -249,6 +250,7 @@ def generate_level2_products(
             "source_table": ["Product Catalog"] * level2_count,
             "source_id_field": ["product_id"] * level2_count,
             "source_id": [f"SUB{i:04d}" for i in range(1, level2_count + 1)],
+            "renewalrate": weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level2_count),
         }
     )
 
@@ -331,6 +333,7 @@ def generate_level3_products(
             "source_table": ["Product Catalog"] * level3_count,
             "source_id_field": ["product_id"] * level3_count,
             "source_id": [f"PROD{i:04d}" for i in range(1, level3_count + 1)],
+            "renewalrate": weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level3_count),
         }
     )
 

@@ -9,7 +9,7 @@ def main() -> None:
     # Use absolute paths for more robust path handling
     # Get the absolute path to the project root directory
     project_root = Path(__file__).parent.absolute()
-    structure_file_path = project_root / "data" / "input" / "Low Level Field Detail Design(6).xlsx"
+    structure_file_path = project_root / "data" / "input" / "Low Level Field Detail Design.xlsx"
 
     # Check if the file exists
     if not structure_file_path.exists():
@@ -32,7 +32,13 @@ def main() -> None:
             print(f"Input directory not found: {input_dir}")
             return
 
-    build(structure_file_path, overwrite=True)
+    # Allow optional per-object row cap via environment variable TEST_MAX_ROWS or default None
+    import os
+
+    max_rows_env = os.getenv("TEST_MAX_ROWS")
+    max_rows = int(max_rows_env) if max_rows_env and max_rows_env.isdigit() else None
+
+    build(structure_file_path, overwrite=True, max_rows_per_object=max_rows)
 
 
 if __name__ == "__main__":

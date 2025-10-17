@@ -654,7 +654,7 @@ def _process_interaction_data(
     Expected columns in interaction_df:
     - "interaction_id": Unique identifier for each interaction
     - "interacted_company_id": Company ID associated with the interaction
-    - "date": Date when the interaction occurred
+    - "date" or "interactiondate": Date when the interaction occurred
 
     :param interaction_df: DataFrame containing interaction data
     :returns: Tuple of (company_interactions_map, interaction_dates_map)
@@ -664,26 +664,29 @@ def _process_interaction_data(
     interaction_dates_map: Dict[str, datetime] = {}
 
     # If we have interaction data, extract interaction IDs and dates
-    if (
-        interaction_df is not None
-        and "interaction_id" in interaction_df.columns
-        and "date" in interaction_df.columns
-    ):
-        # Create a mapping of companies to interactions
-        for row in interaction_df.iter_rows(named=True):
-            interaction_id = row.get("interaction_id")
-            company = row.get("interacted_company_id")
-            date = row.get("date")
+    if interaction_df is not None and "interaction_id" in interaction_df.columns:
+        # Determine which date column to use
+        date_col = (
+            "date"
+            if "date" in interaction_df.columns
+            else ("interactiondate" if "interactiondate" in interaction_df.columns else None)
+        )
+        if date_col is not None:
+            # Create a mapping of companies to interactions
+            for row in interaction_df.iter_rows(named=True):
+                interaction_id = row.get("interaction_id")
+                company = row.get("interacted_company_id")
+                date = row.get(date_col)
 
-            if interaction_id and date:
-                # Store the date for this interaction
-                interaction_dates_map[interaction_id] = date
+                if interaction_id and date:
+                    # Store the date for this interaction
+                    interaction_dates_map[interaction_id] = date
 
-                # If company is available, add to company-interactions map
-                if company:
-                    if company not in company_interactions_map:
-                        company_interactions_map[company] = []
-                    company_interactions_map[company].append(interaction_id)
+                    # If company is available, add to company-interactions map
+                    if company:
+                        if company not in company_interactions_map:
+                            company_interactions_map[company] = []
+                        company_interactions_map[company].append(interaction_id)
 
     return company_interactions_map, interaction_dates_map
 
@@ -719,7 +722,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
     :returns: DataFrame containing all order data
     """
     # Generate order data with fields from the spreadsheet
-    return pl.DataFrame(
+    df = pl.DataFrame(
         {
             "order_id": data.ids,
             "name": [f"Order {i}" for i in data.ids],
@@ -809,6 +812,58 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
             ],
         }
     )
+
+    # Derive additional fields and align to spreadsheet expectations
+    df = df.with_columns(
+        [
+            pl.col("date_completed").alias("outcomedate"),
+            pl.col("transaction_channel").alias("saleschannel"),
+            pl.Series("valuedeltas", [round(fake.random.uniform(-0.2, 0.2), 4) for _ in data.ids]),
+            pl.Series(
+                "valuedeltaswithretention",
+                [
+                    round(v * fake.random.uniform(0.9, 1.1), 4)
+                    for v in [fake.random.uniform(-0.2, 0.2) for _ in data.ids]
+                ],
+            ),
+            pl.Series("arpudelta", [round(fake.random.uniform(-10.0, 10.0), 2) for _ in data.ids]),
+            pl.Series(
+                "renewalquantitydifference",
+                [fake.random_int(min=-5, max=5) for _ in data.ids],
+            ),
+            pl.Series(
+                "cessetionreasongroup",
+                weighted_sample(
+                    ["Contract", "Commercial", "Service", "Migration", "Business Change"],
+                    [0.3, 0.25, 0.2, 0.15, 0.1],
+                    data.n,
+                ),
+            ),
+            pl.col("cessetion_reason").alias("cessetionreasonsubgroup"),
+            pl.Series(
+                "sourcetable",
+                weighted_sample(
+                    ["SFDC_ORDER", "LEGACY_ORDER", "MANUAL_LOAD"],
+                    [0.7, 0.2, 0.1],
+                    data.n,
+                ),
+            ),
+            pl.Series(
+                "sourceid", [f"SRC-{fake.random_int(min=100000, max=999999)}" for _ in data.ids]
+            ),
+            pl.Series(
+                "sourceidfield",
+                weighted_sample(
+                    ["Salesforce OrderId", "LegacyOrderId", "ManualId"],
+                    [0.7, 0.2, 0.1],
+                    data.n,
+                ),
+            ),
+        ]
+    )
+
+    # Remove deprecated/extra fields per schema
+    return df.drop(["transaction_channel", "cessetion_reason"])
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:

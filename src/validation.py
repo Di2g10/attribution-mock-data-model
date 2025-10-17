@@ -15,12 +15,26 @@ __all__ = [
 from src.schema_registry import SchemaRegistry
 
 
-def validate_object(df: pl.DataFrame, name: str, registry: SchemaRegistry, prior: Any) -> None:
+def validate_object(
+    df: pl.DataFrame,
+    name: str,
+    registry: SchemaRegistry,
+    prior: Any,
+    *,
+    skip_row_count: bool = False,
+) -> None:
     """Check that the DataFrame matches the schema.
 
     Placeholder for FK & uniqueness checks (expand later).
+
+    :param df: Generated DataFrame to validate.
+    :param name: Object name.
+    :param registry: Schema registry for configured expectations.
+    :param prior: Previously generated objects (for FK checks in future).
+    :param skip_row_count: When True, do not enforce strict row count checks.
+    :raises ValueError: If validation fails.
     """
-    if not registry.check_row_count(name, df.height):
+    if not skip_row_count and not registry.check_row_count(name, df.height):
         raise ValueError(f"{name}: expected {registry.row_count(name)} rows, got {df.height}")
 
 

@@ -10,7 +10,7 @@ from src.random_utils import make_ids
 
 _schema = [
     ("link_id", pl.String),
-    ("activity_id", pl.String),
+    ("marketing_activity_id", pl.String),
     ("interaction_id", pl.String),
     ("outcome_type", pl.String),
     ("outcome_id", pl.String),
@@ -20,6 +20,9 @@ _schema = [
     ("product_yca_tier", pl.String),
     ("company_yca_type", pl.String),
     ("time_lag", pl.Int64),
+    # Additional fields expected by spreadsheet
+    ("interaction_type", pl.String),
+    ("channel", pl.String),
 ]
 
 
@@ -243,7 +246,7 @@ def _require_df(value: Any, name: str) -> pl.DataFrame:
     return value
 
 
-def generate(n: int, **kwargs: Any) -> pl.DataFrame:
+def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
     """Generate the attribution linking table deterministically from existing data.
 
     The function builds links via multiple strategies in priority order:
@@ -352,26 +355,31 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 right_on="_outcome_id",
                 how="left",
             )
-            # 2) add activity_id and interacted_company_id via Interactions
+            # 2) add marketing_activity_id and interacted_company_id via Interactions
             .join(
                 interaction_df.select(
-                    ["interaction_id", "activity_id", "interacted_company_id"]
+                    ["interaction_id", "marketing_activity_id", "interacted_company_id"]
                 ).lazy(),
                 on="interaction_id",
                 how="left",
                 suffix="_i",
             ).with_columns(
-                pl.coalesce([pl.col("activity_id_i"), pl.col("activity_id")]).alias("activity_id")
+                pl.coalesce(
+                    [pl.col("marketing_activity_id_i"), pl.col("marketing_activity_id")]
+                ).alias("marketing_activity_id")
             )
             # 3) campaign/asset and targeted_company_id via Marketing Activity
             .join(
                 marketing_activity_df.select(
-                    ["id", "campaign_id", "marketing_asset_id", "targeted_company_id"]
-                )
-                .rename({"id": "_activity_id"})
-                .lazy(),
-                left_on="activity_id",
-                right_on="_activity_id",
+                    [
+                        "marketing_activity_id",
+                        "campaign_id",
+                        "marketing_asset_id",
+                        "targeted_company_id",
+                    ]
+                ).lazy(),
+                left_on="marketing_activity_id",
+                right_on="marketing_activity_id",
                 how="left",
             )
             # 4) campaign product
@@ -428,6 +436,24 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 pl.lit(None).cast(pl.String).alias("product_yca_tier"),
                 pl.lit(None).cast(pl.String).alias("company_yca_type"),
             ]
+        )
+
+    # Bring across activity and interaction descriptors
+    try:
+        inter_cols = [
+            c
+            for c in ("interaction_id", "marketing_activity_id", "interaction_type")
+            if c in interaction_df.columns
+        ]
+        addl = interaction_df.select(inter_cols)
+        enriched = enriched.join(addl, on="interaction_id", how="left").with_columns(
+            pl.lit(None).cast(pl.String).alias("channel"),
+        )
+    except Exception:
+        # If join fails, still ensure columns exist
+        enriched = enriched.with_columns(
+            pl.lit(None).cast(pl.String).alias("interaction_type"),
+            pl.lit(None).cast(pl.String).alias("channel"),
         )
 
     # Generate Link IDs
@@ -702,6 +728,11 @@ def _date_difference_filter(
     if missing:  # pragma: no cover
         raise ValueError(f"Required column(s) missing: {', '.join(missing)}")
 
+    # Determine interaction date column name ('interactiondate' preferred, fallback to 'date')
+    interaction_date_col = (
+        "interactiondate" if "interactiondate" in interaction_df.columns else "date"
+    )
+
     lf = (
         link.lazy()
         .join(interaction_df.lazy(), on="interaction_id", how="inner", suffix="_interaction")
@@ -713,7 +744,7 @@ def _date_difference_filter(
             suffix="_outcome",
         )
         .with_columns(
-            (pl.col("date_raised") - pl.col("date")).alias("_lag"),
+            (pl.col("date_raised") - pl.col(interaction_date_col)).alias("_lag"),
         )
         .filter(pl.col("_lag") >= pl.duration(days=0))
         .with_columns(

@@ -37,7 +37,7 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
 
     activity_df = pl.DataFrame(
         {
-            "id": ["ACT0000001", "ACT0000002"],
+            "marketing_activity_id": ["ACT0000001", "ACT0000002"],
             "targeted_person_id": ["PER0000001", "PER0000002"],
             "targeted_company_id": ["CO0000001", "CO0000002"],
         }
@@ -82,8 +82,8 @@ def test_interactions_with_related_objects() -> None:
     ), f"Unexpected person IDs: {person_interacted - person_ids}"
 
     # --- Test 3: Activity IDs are valid ---
-    activity_ids = set(prior["Marketing Activity"]["id"].to_list())
-    activities = set(df["activity_id"].drop_nulls().to_list())
+    activity_ids = set(prior["Marketing Activity"]["marketing_activity_id"].to_list())
+    activities = set(df["marketing_activity_id"].drop_nulls().to_list())
     assert activities.issubset(
         activity_ids
     ), f"Unexpected activity IDs: {activities - activity_ids}"
@@ -118,12 +118,12 @@ def test_interactions_with_related_objects() -> None:
     # --- Test 6: Interactions match the person/company on the related activity ---
     activity_df = prior["Marketing Activity"].select(
         [
-            pl.col("id").alias("activity_id"),
+            pl.col("marketing_activity_id").alias("marketing_activity_id"),
             pl.col("targeted_person_id").alias("expected_person_id"),
             pl.col("targeted_company_id").alias("expected_company_id"),
         ]
     )
-    merged = df.join(activity_df, on="activity_id", how="inner")
+    merged = df.join(activity_df, on="marketing_activity_id", how="inner")
 
     mismatched = merged.filter(
         (pl.col("interacted_person_id") != pl.col("expected_person_id"))
@@ -131,7 +131,7 @@ def test_interactions_with_related_objects() -> None:
     )
     assert mismatched.is_empty(), (
         f"Some interactions do not match their activity's person/company:\n"
-        f"{mismatched.select(['interaction_id', 'activity_id', 'interacted_person_id', 'expected_person_id', 'interacted_company_id', 'expected_company_id'])}"
+        f"{mismatched.select(['interaction_id', 'marketing_activity_id', 'interacted_person_id', 'expected_person_id', 'interacted_company_id', 'expected_company_id'])}"
     )
 
 
@@ -143,7 +143,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         # Get the absolute path to the project root directory
         project_root = Path(__file__).parent.parent.absolute()
         self.structure_file_path = (
-            project_root / "data" / "input" / "Low Level Field Detail Design(6).xlsx"
+            project_root / "data" / "input" / "Low Level Field Detail Design.xlsx"
         )
 
         # Locate a suitable spreadsheet file if the default path is missing
@@ -216,7 +216,11 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
 
         # Basic shape/columns
         self.assertIn("channel", df.columns, "Generated interactions should have a 'channel' field")
-        self.assertIn("type", df.columns, "Generated interactions should have a 'type' field")
+        self.assertIn(
+            "interaction_type",
+            df.columns,
+            "Generated interactions should have an 'interaction_type' field",
+        )
 
         # Channels must be known
         for channel in df["channel"].to_list():
@@ -229,7 +233,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         # Types must be valid for the channel
         for row in df.iter_rows(named=True):
             channel = row["channel"]
-            interaction_type = row["type"]
+            interaction_type = row["interaction_type"]
             valid_types = self.channel_to_interaction_types.get(channel, [])
             self.assertIn(
                 interaction_type,
@@ -255,14 +259,14 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         # Prepare expected targets from the Push Activity prior
         activity_df = self.prior["Marketing Activity"].select(
             [
-                pl.col("id").alias("activity_id"),
+                pl.col("marketing_activity_id").alias("marketing_activity_id"),
                 pl.col("targeted_person_id").alias("expected_person_id"),
                 pl.col("targeted_company_id").alias("expected_company_id"),
             ]
         )
 
         # Join to compare actual vs expected
-        merged = df.join(activity_df, on="activity_id", how="inner")
+        merged = df.join(activity_df, on="marketing_activity_id", how="inner")
 
         mismatched = merged.filter(
             (pl.col("interacted_person_id") != pl.col("expected_person_id"))
@@ -276,7 +280,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
                 mismatched.select(
                     [
                         "interaction_id",
-                        "activity_id",
+                        "marketing_activity_id",
                         "interacted_person_id",
                         "expected_person_id",
                         "interacted_company_id",

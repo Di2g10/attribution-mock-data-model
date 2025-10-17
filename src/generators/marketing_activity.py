@@ -68,7 +68,6 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Core row generation ------------------------------------------------------
     ids = make_ids(n, "ACT")
     start_dates = [random_date() for _ in range(n)]
-    control_flags = [random() < CONTROL_PROBABILITY for _ in range(n)]
     status_vals = weighted_sample(STATUS, STATUS_W, n)
     system_ids = [f"SYS{fake.random_int(1000, 9999)}" for _ in range(n)]
     names = [f"Marketing Activity {i}" for i in ids]
@@ -96,21 +95,20 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
         rows.append(
             {
+                "marketing_activity_id": ids[i],
                 "audience_id": maybe_choice(audience_ids),
                 "campaign_id": maybe_choice(campaign_ids),
-                "channel_id": chan_id,
-                "control": control_flags[i],
-                "end_date": end_d,
-                "id": ids[i],
                 "marketing_asset_id": maybe_choice(marketing_asset_ids),
+                "system_id": system_ids[i],
+                "channel_id": chan_id,
+                "targeted_company_id": tgt_comp,
+                "targeted_person_id": tgt_pers,
+                "end_date": end_d,
                 "name": names[i],
                 "reach_companies": reach_co,
                 "reach_individuals": reach_ind,
                 "start_date": start_dates[i],
                 "status": status_vals[i],
-                "system_id": system_ids[i],
-                "targeted_company_id": tgt_comp,
-                "targeted_person_id": tgt_pers,
             }
         )
 
@@ -121,9 +119,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         "audience_id",
         "campaign_id",
         "channel_id",
-        "control",
         "end_date",
-        "id",
+        "marketing_activity_id",
         "marketing_asset_id",
         "name",
         "reach_companies",

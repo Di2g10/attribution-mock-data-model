@@ -47,7 +47,7 @@ class TestAttributionLinkingMethods(unittest.TestCase):
                 "interaction_id": ["I1", "I2"],
                 "interacted_person_id": ["P1", None],
                 "interacted_company_id": ["C2", "C2"],
-                "activity_id": ["A1", "A2"],
+                "marketing_activity_id": ["A1", "A2"],
                 "date": [
                     __import__("datetime").datetime(2024, 1, 1),
                     __import__("datetime").datetime(2024, 1, 2),
@@ -72,7 +72,7 @@ class TestAttributionLinkingMethods(unittest.TestCase):
         )
         self.marketing_activity_df = pl.DataFrame(
             {
-                "id": ["A1", "A2"],
+                "marketing_activity_id": ["A1", "A2"],
                 "campaign_id": [None, None],
                 "marketing_asset_id": [None, None],
                 "targeted_company_id": [None, None],

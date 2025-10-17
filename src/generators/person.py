@@ -40,17 +40,26 @@ PERSON_ROLE_WEIGHTS = [
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
-    """Generate a DataFrame of person data."""
-    # Extract company data from prior if available
-    # prior = kwargs.get("prior", {})
-    # company_df = prior.get("Company", None)
-    # Note: We're not currently using prior or company_df
+    """Generate a DataFrame of person data.
+
+    :param n: Number of rows to generate
+    :param kwargs: May include `prior` mapping of previously generated objects
+    :returns: Polars DataFrame of Person rows including `companyid`
+    """
+    # Try to source Company IDs from prior for FK coherence
+    prior = kwargs.get("prior", {})
+    company_df = prior.get("Company")
+    if company_df is not None and "company_id" in company_df.columns:
+        company_ids: list[str] = company_df.get_column("company_id").to_list()
+    else:
+        company_ids = []
 
     # Generate person IDs
     ids = make_ids(n, "PER")
 
-    # Note: We're not currently using company_df
-    # but keeping the parameter for future use
+    # Choose a company for each person (allow duplicates); None if not available
+    companyid: list[str | None]
+    companyid = weighted_sample(company_ids, n=n) if company_ids else [None] * n
 
     # Generate person data
     return pl.DataFrame(
@@ -62,6 +71,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 [0.2, 0.3, 0.2, 0.15, 0.15],
                 n,
             ),
+            "companyid": companyid,
             "source_id": [f"SRC{fake.random_int(min=1000, max=9999)}" for _ in ids],
             "source_table": weighted_sample(
                 ["CRM", "Marketing Automation", "Web Form", "Manual Entry", "Import"],
@@ -69,5 +79,6 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 n,
             ),
             "source_id_field": [f"Field_{fake.random_int(min=1, max=100)}" for _ in ids],
+            "…": [""] * n,
         }
     )

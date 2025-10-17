@@ -331,6 +331,9 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 n,
             ),
             "targeted_audience_id": [f"AUD{fake.random_int(min=1000, max=9999)}" for _ in ids],
+            "source_table": ["Campaign Management"] * n,
+            "source_id_field": ["campaign_id"] * n,
+            "source_id": [f"CMP{i:04d}" for i in range(1, n + 1)],
         }
     )
 

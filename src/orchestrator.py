@@ -21,6 +21,7 @@ def build(
     workbook: str | Path,
     output_path: str | Path = "mock_output",
     overwrite: bool = False,
+    max_rows_per_object: int | None = None,
 ) -> dict[str, pl.DataFrame]:
     """High-level façade called by users & tests.
 
@@ -30,6 +31,10 @@ def build(
     :param workbook: Path to the Excel workbook that defines schemas and counts.
     :param output_path: Directory where CSVs will be written.
     :param overwrite: Whether to overwrite the output directory if it exists.
+    :param max_rows_per_object: Optional cap; if provided, each generated object's
+        DataFrame will be truncated to at most this many rows. This does not
+        modify the configured row counts in validation; tests using this option
+        should avoid strict row-count assertions.
     :returns: Mapping of object name to generated Polars DataFrame.
     """
     start_all = perf_counter()
@@ -55,10 +60,19 @@ def build(
             t0 = perf_counter()
             gen_module: ModuleType = import_module(f"src.generators.{module_name}")
             df = gen_module.generate(row_count, registry=registry, prior=objs)
+            # Apply optional per-object cap to speed up tests
+            if max_rows_per_object is not None and df.height > max_rows_per_object:
+                df = df.slice(0, max_rows_per_object)
             gen_dur = perf_counter() - t0
 
             t1 = perf_counter()
-            validate_object(df, obj_name, registry, prior=objs)
+            validate_object(
+                df,
+                obj_name,
+                registry,
+                prior=objs,
+                skip_row_count=(max_rows_per_object is not None),
+            )
             val_dur = perf_counter() - t1
 
             objs[obj_name] = df

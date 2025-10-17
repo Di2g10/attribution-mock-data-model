@@ -38,7 +38,7 @@ def prior_with_roles() -> Dict[str, pl.DataFrame]:
     # - One with a null targeted_company_id
     activity_df = pl.DataFrame(
         {
-            "id": ["ACT0100001", "ACT0100002"],
+            "marketing_activity_id": ["ACT0100001", "ACT0100002"],
             "targeted_person_id": ["PER0100001", "PER0100001"],
             "targeted_company_id": ["CO0000102", None],
         }
@@ -79,7 +79,7 @@ def test_role_fills_when_targeted_company_null() -> None:
     prior = prior_with_roles()
     df = generate_interactions(10, prior=prior, keep_channel=False)
 
-    rows = df.filter(pl.col("activity_id") == "ACT0100002")
+    rows = df.filter(pl.col("marketing_activity_id") == "ACT0100002")
     assert not rows.is_empty(), "Expected interactions from the activity with null company"
     # All such rows should use the role company
     assert rows.select(pl.col("interacted_company_id").unique()).to_series().to_list() == [

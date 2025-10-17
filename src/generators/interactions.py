@@ -216,7 +216,7 @@ class InteractionData:
     interaction_types: List[str]
     company_ids: List[str] | None = None
     person_ids: List[str] | None = None
-    activity_ids: List[str] | None = None
+    marketing_activity_ids: List[str] | None = None
 
 
 def _generate_person_data(data: InteractionData) -> List[str]:
@@ -237,10 +237,10 @@ def _generate_activity_data(data: InteractionData) -> List[str]:
     :param data: Interaction data parameters
     :returns: List of activity descriptions or IDs
     """
-    if data.activity_ids is None or len(data.activity_ids) == 0:
+    if data.marketing_activity_ids is None or len(data.marketing_activity_ids) == 0:
         return [fake.sentence(nb_words=6) for _ in data.ids]
     # Randomly select activity IDs
-    return [fake.random.choice(data.activity_ids) for _ in data.ids]
+    return [fake.random.choice(data.marketing_activity_ids) for _ in data.ids]
 
 
 def _generate_followup_data(
@@ -369,7 +369,7 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
                 data.n,
             ),
             "channel": data.channels,
-            "type": data.interaction_types,
+            "interaction_type": data.interaction_types,
             "datasource": weighted_sample(
                 ["CRM", "Marketing Automation", "Web Analytics", "Social Media", "Survey"],
                 [0.3, 0.2, 0.2, 0.2, 0.1],
@@ -377,7 +377,7 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
             ),
             "interacted Person ID": person_interacted,
             "interacted Company ID": company_interacted,
-            "activity_id": activity,
+            "marketing_activity_id": activity,
             "date": data.interaction_dates,
             "duration": data.durations,
             "followfrominteraction": followfrom_interactions,
@@ -399,7 +399,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # --- 1. Gather activities from Push and Pull sources ---
     marketing_activity_df = prior.get("Marketing Activity")
     if marketing_activity_df is None or not {
-        "id",
+        "marketing_activity_id",
         "targeted_person_id",
         "targeted_company_id",
     }.issubset(marketing_activity_df.columns):
@@ -412,7 +412,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     )
     activities_df = marketing_activity_df.with_columns(fallback_series).select(
         [
-            pl.col("id").alias("activity_id"),
+            pl.col("marketing_activity_id").alias("marketing_activity_id"),
             pl.when(pl.col("targeted_person_id").is_not_null())
             .then(pl.col("targeted_person_id"))
             .otherwise(pl.col("random_person_id"))
@@ -488,7 +488,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     sampled_df = sampled_df.with_columns(
         [
             pl.Series("channel", channels),
-            pl.Series("type", interaction_types),
+            pl.Series("interaction_type", interaction_types),
             pl.Series(
                 "identificationmethod",
                 weighted_sample(
@@ -558,4 +558,58 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             .alias("interacted_company_id")
         ).drop("_ip_fill_company")
 
-    return sampled_df if kwargs.get("keep_channel", False) else sampled_df.drop("channel")
+    # Add source fields and align names to spreadsheet expectations
+    source_tables = weighted_sample(
+        [
+            "SFDC_TASK",
+            "WEB_ANALYTICS",
+            "MA_ACTIVITY",
+            "SERVICE_DESK",
+            "MANUAL_LOAD",
+        ],
+        [0.45, 0.2, 0.2, 0.1, 0.05],
+        n,
+    )
+    sampled_df = sampled_df.with_columns(
+        [
+            pl.Series("sourcetable", source_tables),
+            pl.Series(
+                "sourceid", [f"SRC-{fake.random_int(min=100000, max=999999)}" for _ in range(n)]
+            ),
+            pl.Series(
+                "sourceidfield",
+                weighted_sample(
+                    [
+                        "Salesforce TaskId",
+                        "GA4 Event Id",
+                        "Marketo Activity Id",
+                        "Jira Ticket Key",
+                        "Manual Id",
+                    ],
+                    [0.45, 0.2, 0.2, 0.1, 0.05],
+                    n,
+                ),
+            ),
+        ]
+    )
+
+    # Rename columns to expected names and drop extras
+    sampled_df = sampled_df.rename(
+        {
+            "date": "interactiondate",
+            "identificationmethod": "identificationmethodtype",
+            "duration": "interactiondur",
+            "followfrominteraction": "followfrominteractionid",
+            "datasource": "datasourcename",
+        }
+    ).with_columns(
+        [
+            # ensure duration is int
+            pl.col("interactiondur").cast(pl.Int64, strict=False),
+        ]
+    )
+
+    # Optionally drop channel column to maintain prior behaviour
+    if kwargs.get("keep_channel", False):
+        return sampled_df
+    return sampled_df.drop("channel")

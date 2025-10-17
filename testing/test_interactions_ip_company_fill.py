@@ -31,7 +31,7 @@ def prior_with_null_company_and_no_roles() -> dict[str, pl.DataFrame]:
     # Activities target persons but sometimes no company
     activity_df = pl.DataFrame(
         {
-            "id": ["ACTX1", "ACTX2", "ACTX3"],
+            "marketing_activity_id": ["ACTX1", "ACTX2", "ACTX3"],
             "targeted_person_id": ["PIP0001", "PIP0002", "PIP0001"],
             "targeted_company_id": [None, None, None],
         }

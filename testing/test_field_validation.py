@@ -63,7 +63,7 @@ class TestFieldValidation(unittest.TestCase):
         # Get the absolute path to the project root directory
         project_root = Path(__file__).parent.parent.absolute()
         self.structure_file_path = (
-            project_root / "data" / "input" / "Low Level Field Detail Design(6).xlsx"
+            project_root / "data" / "input" / "Low Level Field Detail Design.xlsx"
         )
 
         # Check if the file exists
@@ -93,8 +93,8 @@ class TestFieldValidation(unittest.TestCase):
 
     def test_generator_fields_match_spreadsheet(self) -> None:
         """Test that generator fields match the spreadsheet."""
-        # Generate data for all objects
-        generated_data = build(self.structure_file_path, overwrite=True)
+        # Generate data for all objects (cap rows to speed up test runs)
+        generated_data = build(self.structure_file_path, overwrite=True, max_rows_per_object=1000)
 
         # Track errors for all objects
         error_messages: List[str] = []
@@ -122,12 +122,14 @@ class TestFieldValidation(unittest.TestCase):
             if extra_fields:
                 error_messages.append(f"Object '{obj_name}' has extra fields: {extra_fields}")
 
-            if error_messages:
-                all_errors = "\n".join(error_messages)
-                self.fail(f"Field validation failed:\n{all_errors}")
+            # If no errors for this object, print success
+            if not (missing_fields or extra_fields):
+                print(f"Object '{obj_name}' fields match spreadsheet")
 
-            # If we get here, all fields match
-            print(f"Object '{obj_name}' fields match spreadsheet")
+        # After checking all objects, fail if any errors were found
+        if error_messages:
+            all_errors = "\n".join(error_messages)
+            self.fail(f"Field validation failed:\n{all_errors}")
 
 
 if __name__ == "__main__":

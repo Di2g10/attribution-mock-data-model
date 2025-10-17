@@ -81,7 +81,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             "channel_id": make_ids(n, "CHAN"),
             "name": [r["Name"] for r in rows],
             "group": [r["Group"] for r in rows],
-            "identifiable_method": [r["Identifiable method"] for r in rows],
+            # "identifiable_method": [r["Identifiable method"] for r in rows],
             "type": [r["Type"] for r in rows],
         }
     )

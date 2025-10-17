@@ -71,7 +71,7 @@ class TestProductsWithDesignFile(unittest.TestCase):
         # Get the absolute path to the project root directory
         project_root = Path(__file__).parent.parent.absolute()
         self.structure_file_path = (
-            project_root / "data" / "input" / "Low Level Field Detail Design(6).xlsx"
+            project_root / "data" / "input" / "Low Level Field Detail Design.xlsx"
         )
 
         # Check if the file exists
