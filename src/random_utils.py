@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import time
 from datetime import datetime, timedelta
 from typing import Sequence, TypeVar, Optional, Tuple, Dict, List, Any, Mapping
 
@@ -128,6 +129,7 @@ def generate_mapped_values(
     parent_values: Sequence[str],
     mapping_dict: Mapping[str, Sequence[Any]],
     fallback_values: Optional[Sequence[Any]] = None,
+    verbose: bool = False,
 ) -> list[Any]:
     """Generate child values based on parent categories using a mapping dictionary.
 
@@ -167,6 +169,9 @@ def generate_mapped_values(
     )
     ```
     """
+    if verbose:
+        start_total = time.perf_counter()
+
     # If no parent values, return empty list
     if not parent_values:
         return []
@@ -174,6 +179,10 @@ def generate_mapped_values(
     # If mapping_dict is empty and no fallback, return None for each parent
     if not mapping_dict and fallback_values is None:
         return [None] * len(parent_values)
+
+    # Pre-generate child values for each parent category
+    if verbose:
+        start_pregen = time.perf_counter()
 
     # Pre-generate child values for each parent category
     child_map: dict[str, list[Any]] = {}
@@ -189,6 +198,10 @@ def generate_mapped_values(
         n_values = len(parent_values)
         indices = _rng.integers(0, len(child_values), size=n_values)
         child_map[parent] = [child_values[i] for i in indices]
+
+    if verbose:
+        print(f"  Pre-generation: {time.perf_counter() - start_pregen:.4f}s")
+        start_mapping = time.perf_counter()
 
     # Map each parent to its pre-generated child value
     result: list[Any] = []
@@ -209,6 +222,9 @@ def generate_mapped_values(
         else:
             # No mapping and no fallback
             result.append(None)
+    if verbose:
+        print(f"  Mapping: {time.perf_counter() - start_mapping:.4f}s")
+        print(f"  Total: {time.perf_counter() - start_total:.4f}s")
 
     return result
 

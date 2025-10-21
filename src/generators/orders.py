@@ -583,6 +583,15 @@ def _assign_contacts_to_orders(  # noqa: PLR0913
             interaction_based_company_person_map,
             person_role_map,
         )
+        # Enforce: if we have interaction evidence for this company, the contact must be from it
+        if (
+            contact is not None
+            and isinstance(company, str)
+            and company in interaction_based_company_person_map
+            and contact not in interaction_based_company_person_map.get(company, [])
+        ):
+            inter_pool = interaction_based_company_person_map.get(company, [])
+            contact = fake.random.choice(inter_pool) if inter_pool else contact
         order_contacts.append(contact)
 
     return order_contacts  # type: ignore[return-value]

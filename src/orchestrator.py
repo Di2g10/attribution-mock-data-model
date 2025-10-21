@@ -75,6 +75,8 @@ def build(
             )
             val_dur = perf_counter() - t1
 
+            df = _reorder_columns(obj_name, df)
+
             objs[obj_name] = df
             print(
                 f"[orchestrator] Completed '{obj_name}': rows={df.height}, gen={gen_dur:.2f}s, validate={val_dur:.2f}s"
@@ -101,3 +103,72 @@ def build(
     print(f"[orchestrator] Build completed in {total_dur:.2f}s")
 
     return objs
+
+
+# ---------------------------------------------------------------------------
+# Column ordering helper: PK, then FKs, then others with dates grouped
+# ---------------------------------------------------------------------------
+
+
+def _reorder_columns(object_name: str, df: pl.DataFrame) -> pl.DataFrame:
+    """Reorder a DataFrame's columns for consistent output ordering.
+
+    Rules:
+    - Primary Key (PK) first
+    - Foreign Keys (FKs) next (all *_id except the PK)
+    - Other fields after, with date-like fields grouped to the end of the frame
+
+    The function preserves relative order within each group.
+
+    :param object_name: Canonical object name used by the generators.
+    :param df: Polars DataFrame to reorder.
+    :returns: DataFrame with columns reordered.
+    """
+    import re
+
+    cols = list(df.columns)
+    if not cols:
+        return df
+
+    # Known PKs by object name (keep simple; extend when needed)
+    pk_map = {
+        "Company": "company_id",
+        "Person": "person_id",
+        "Person Company Role": "person_company_role_id",
+        "Products": "product_id",
+        "Campaigns": "campaign_id",
+        "Audience": "audience_id",
+        "Channels": "channel_id",
+        "Marketing Assets": "marketing_asset_id",
+        "Marketing Activity": "marketing_activity_id",
+        "Interactions": "interaction_id",
+        "Orders": "order_id",
+        "Attribution Linking Table": "link_id",
+        "Attribution Model": "model_id",
+        "Attribution Model Output Table": "output_id",
+        "Date Dimension": "date_id",
+        "Facilitation Tool": "facilitation_tool_id",
+    }
+
+    pk = pk_map.get(object_name)
+    if pk not in cols:
+        # Fallback: choose the first *_id that ends with the object token (e.g. interaction_id)
+        pattern = re.compile(r".*_id$")
+        ids = [c for c in cols if pattern.match(c)]
+        pk = ids[0] if ids else None
+
+    def is_date(c: str) -> bool:
+        cl = c.lower()
+        return "date" in cl or cl in {"interactiondate", "outcomedate"}
+
+    # Partition columns preserving original order
+    pk_cols: list[str | None] = [pk] if pk in cols else []
+    fk_cols: list[str] = [c for c in cols if c.endswith("_id") and c != pk]
+    date_cols: list[str] = [c for c in cols if is_date(c) and c not in pk_cols and c not in fk_cols]
+    other_cols: list[str] = [c for c in cols if c not in pk_cols + fk_cols + date_cols]
+
+    new_order = pk_cols + fk_cols + other_cols + date_cols
+    # Ensure we didn't drop anything accidentally
+    if set(new_order) != set(cols) or len(new_order) != len(cols):
+        return df  # safety: keep original if something went wrong
+    return df.select(new_order)

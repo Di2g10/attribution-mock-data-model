@@ -153,7 +153,9 @@ def get_channel_data_from_registry(registry: Any) -> Tuple[Dict[str, List[str]],
                     if channel and channel in channel_names:
                         # Extract all non-empty values except "Channel" as interaction types
                         interaction_types = [
-                            value for key, value in row.items() if key != "Channel" and value
+                            value
+                            for key, value in row.items()
+                            if key not in ["Channel", "Interactsion Concatnated"] and value
                         ]
                         if interaction_types:
                             channel_interaction_types[channel] = interaction_types
@@ -201,6 +203,7 @@ def generate_interaction_types(
         parent_values=channels,
         mapping_dict=channel_interaction_types,
         fallback_values=FALLBACK_INTERACTION_TYPES,
+        verbose=True,
     )
 
 
