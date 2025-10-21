@@ -30,8 +30,8 @@ def test_empty_mapping_dict_with_fallback() -> None:
     seed_everything(42)
     fallback = ["default1", "default2"]
     result = generate_mapped_values(["A", "B", "C"], {}, fallback_values=fallback)
-    target_lenth = 3
-    assert len(result) == target_lenth
+    target_length = 3
+    assert len(result) == target_length
     # All results should be from fallback values
     for val in result:
         assert val in fallback
@@ -46,8 +46,8 @@ def test_basic_mapping() -> None:
         "Channel_B": ["Type3", "Type4"],
     }
     result = generate_mapped_values(parent_values, mapping)
-    target_lenth = 3
-    assert len(result) == target_lenth
+    target_length = 3
+    assert len(result) == target_length
     # First and third should be from Channel_A's types
     assert result[0] in mapping["Channel_A"]
     assert result[2] in mapping["Channel_A"]
@@ -63,8 +63,8 @@ def test_unmapped_parent_with_fallback() -> None:
     fallback = ["FallbackX", "FallbackY"]
 
     result = generate_mapped_values(parent_values, mapping, fallback_values=fallback)
-    target_lenth = 3
-    assert len(result) == target_lenth
+    target_length = 3
+    assert len(result) == target_length
     # First and third should be from Known mapping
     assert result[0] in mapping["Known"]
     assert result[2] in mapping["Known"]
@@ -79,8 +79,8 @@ def test_unmapped_parent_without_fallback() -> None:
     mapping = {"Known": ["A", "B"]}
 
     result = generate_mapped_values(parent_values, mapping)
-    target_lenth = 2
-    assert len(result) == target_lenth
+    target_length = 2
+    assert len(result) == target_length
     assert result[0] in mapping["Known"]
     assert result[1] is None
 
@@ -92,8 +92,8 @@ def test_single_value_per_parent() -> None:
     mapping = {"A": ["only_x"], "B": ["only_y"]}
 
     result = generate_mapped_values(parent_values, mapping)
-    target_lenth = 4
-    assert len(result) == target_lenth
+    target_length = 4
+    assert len(result) == target_length
     assert result[0] == "only_x"
     assert result[1] == "only_y"
     assert result[2] == "only_x"
@@ -112,8 +112,8 @@ def test_large_dataset() -> None:
     }
 
     result = generate_mapped_values(parent_values, mapping)
-    target_lenth = 2500
-    assert len(result) == target_lenth
+    target_length = 2500
+    assert len(result) == target_length
     # Verify all values come from their respective mappings
     for i, parent in enumerate(parent_values):
         assert result[i] in mapping[parent]
@@ -127,8 +127,8 @@ def test_empty_child_values_list() -> None:
     fallback = ["fallback"]
 
     result = generate_mapped_values(parent_values, mapping, fallback_values=fallback)
-    target_lenth = 2
-    assert len(result) == target_lenth
+    target_length = 2
+    assert len(result) == target_length
     # A should use fallback since it has empty child values
     assert result[0] in fallback
     # B should use its mapping
@@ -176,8 +176,8 @@ def test_mixed_types_in_child_values() -> None:
     }
 
     result = generate_mapped_values(parent_values, mapping)
-    target_lenth = 2
-    assert len(result) == target_lenth
+    target_length = 2
+    assert len(result) == target_length
     assert result[0] in mapping["Category1"]
     assert result[1] in mapping["Category2"]
     assert isinstance(result[0], int)
@@ -196,8 +196,8 @@ def test_real_world_channel_interaction_scenario() -> None:
 
     result = generate_mapped_values(channels, channel_to_interaction)
 
-    target_lenth = 5
-    assert len(result) == target_lenth
+    target_length = 5
+    assert len(result) == target_length
     # Verify each result matches its channel's possible interactions
     assert result[0] in channel_to_interaction["Email"]
     assert result[1] in channel_to_interaction["Social Media"]
@@ -214,8 +214,8 @@ def test_verbose_mode_timing() -> None:
 
     # Should not raise any exceptions
     result = generate_mapped_values(parent_values, mapping, verbose=True)
-    target_lenth = 200
-    assert len(result) == target_lenth
+    target_length = 200
+    assert len(result) == target_length
 
 
 def test_performance_benchmark() -> None:
