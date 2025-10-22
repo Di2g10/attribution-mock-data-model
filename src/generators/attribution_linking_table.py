@@ -22,7 +22,7 @@ _schema = [
     ("time_lag", pl.Int64),
     # Additional fields expected by spreadsheet
     ("interaction_type", pl.String),
-    ("channel", pl.String),
+    ("channel_name", pl.String),
 ]
 
 
@@ -246,7 +246,7 @@ def _require_df(value: Any, name: str) -> pl.DataFrame:
     return value
 
 
-def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
+def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate the attribution linking table deterministically from existing data.
 
     The function builds links via multiple strategies in priority order:
@@ -265,6 +265,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
     company_df = _require_df(prior.get("Company"), "Company")
     order_df = _require_df(prior.get("Orders"), "Order")
     person_company_role_df = _require_df(prior.get("Person Company Role"), "Person Company Role")
+    marketing_activity_df = _require_df(prior.get("Marketing Activity"), "Marketing Activity")
+    channel_df = _require_df(prior.get("Channels"), "Channel")
 
     # Build all link types
     direct_person_links = _generate_links_direct_person(interaction_df, order_df)
@@ -273,38 +275,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
     )
     company_only_links = _generate_links_company_only(interaction_df, company_df, order_df)
 
-    # Add a priority for deduplication: lower number = higher priority
-    def _with_priority(df: pl.DataFrame, prio: int) -> pl.DataFrame:
-        # Always add the helper priority column, even on empty frames, to ensure consistent width
-        return df.with_columns(pl.lit(prio).alias("_priority"))
-
-    stacked = (
-        pl.concat(
-            [
-                _with_priority(direct_person_links, 0),
-                _with_priority(person_company_link_df, 1),
-                _with_priority(company_only_links, 2),
-            ],
-            how="vertical",
-            rechunk=True,
-        )
-        if (
-            not direct_person_links.is_empty()
-            or not person_company_link_df.is_empty()
-            or not company_only_links.is_empty()
-        )
-        else _define_schema().with_columns(pl.lit(1).alias("_priority"))
-    )
-
-    # Deduplicate per (interaction_id, outcome_id) keeping highest priority then drop helper
-    combined_links = (
-        stacked.sort(["_priority"])
-        .unique(subset=["interaction_id", "outcome_id"], keep="first")
-        .drop("_priority")
-    )
+    df = merge_links([direct_person_links, person_company_link_df, company_only_links])
 
     # Filter on dates and add date difference
-    filtered_links = _date_difference_filter(combined_links, interaction_df, order_df)
+    filtered_links = _date_difference_filter(df, interaction_df, order_df)
 
     # ---------- Enrichment (Product YCA tier and Company YCA type) ----------
     products_df = _require_df(prior.get("Products"), "Products")
@@ -358,7 +332,12 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
             # 2) add marketing_activity_id and interacted_company_id via Interactions
             .join(
                 interaction_df.select(
-                    ["interaction_id", "marketing_activity_id", "interacted_company_id"]
+                    [
+                        "interaction_id",
+                        "marketing_activity_id",
+                        "interacted_company_id",
+                        "interaction_type",
+                    ]
                 ).lazy(),
                 on="interaction_id",
                 how="left",
@@ -376,6 +355,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
                         "campaign_id",
                         "marketing_asset_id",
                         "targeted_company_id",
+                        "channel_id",
                     ]
                 ).lazy(),
                 left_on="marketing_activity_id",
@@ -398,11 +378,23 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
                 on="marketing_asset_id",
                 how="left",
             )
-            # 6) derive activity_company_id with preference for targeted_company_id
+            # 6) Get channel Name from ID
+            .join(
+                channel_df.select(["channel_id", "name"]).rename({"name": "channel_name"}).lazy(),
+                on="channel_id",
+                how="left",
+            )
+            # 7) derive activity_company_id with preference for targeted_company_id
             .with_columns(
                 pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
                     "activity_company_id"
-                )
+                ),
+                pl.coalesce(
+                    [pl.col("marketing_activity_id_i"), pl.col("marketing_activity_id")]
+                ).alias("marketing_activity_id"),
+                pl.coalesce([pl.col("interaction_type"), pl.col("interaction_type_i")]).alias(
+                    "interaction_type"
+                ),
             )
         ).collect(streaming=True)
 
@@ -436,24 +428,6 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # noqa: PLR0915
                 pl.lit(None).cast(pl.String).alias("product_yca_tier"),
                 pl.lit(None).cast(pl.String).alias("company_yca_type"),
             ]
-        )
-
-    # Bring across activity and interaction descriptors
-    try:
-        inter_cols = [
-            c
-            for c in ("interaction_id", "marketing_activity_id", "interaction_type")
-            if c in interaction_df.columns
-        ]
-        addl = interaction_df.select(inter_cols)
-        enriched = enriched.join(addl, on="interaction_id", how="left").with_columns(
-            pl.lit(None).cast(pl.String).alias("channel"),
-        )
-    except Exception:
-        # If join fails, still ensure columns exist
-        enriched = enriched.with_columns(
-            pl.lit(None).cast(pl.String).alias("interaction_type"),
-            pl.lit(None).cast(pl.String).alias("channel"),
         )
 
     # Generate Link IDs
@@ -660,7 +634,7 @@ def _generate_links_company_only(
     :param order_df: Orders table (requires company_id)
     :returns: Links dataframe with person_id null and relation_type "Interaction-Company-Order".
     """
-    # Only consider interactions where person is unknown but company is known
+    # Only consider interactions when person is unknown but company is known
     base = interaction_df.filter(
         pl.col("interacted_person_id").is_null() & pl.col("interacted_company_id").is_not_null()
     )
@@ -717,7 +691,7 @@ def _generate_links_company_only(
 
 
 def _date_difference_filter(
-    link: pl.DataFrame, interaction_df: pl.DataFrame, outcome_df: pl.DataFrame
+    link: pl.lazyframe.LazyFrame, interaction_df: pl.DataFrame, outcome_df: pl.DataFrame
 ) -> pl.DataFrame:
     """Calculate the difference between activity and outcome & Filter interaction after outcome.
 
@@ -734,8 +708,7 @@ def _date_difference_filter(
     )
 
     lf = (
-        link.lazy()
-        .join(interaction_df.lazy(), on="interaction_id", how="inner", suffix="_interaction")
+        link.join(interaction_df.lazy(), on="interaction_id", how="inner", suffix="_interaction")
         .join(
             outcome_df.lazy(),
             left_on="outcome_id",
@@ -758,4 +731,40 @@ def _date_difference_filter(
         # 3. final column order
         .select([name for name, _ in _schema])
     )
-    return lf.collect(streaming=True)
+    return _safe_schema_select(lf).collect(streaming=True)
+
+
+def _safe_schema_select(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame | pl.DataFrame:
+    """Select only columns that both exist on `frame` and appear in `_schema`."""
+    wanted = [name for name, _ in _schema]
+    if isinstance(frame, pl.LazyFrame):
+        # On modern Polars, LazyFrame.schema is dict-like; iterating yields column names.
+        available = set(
+            frame.schema
+        )  # if on older Polars, use: set(frame.collect_schema().names())
+        return frame.select([pl.col(c) for c in wanted if c in available])
+    available = set(frame.columns)
+    return frame.select([c for c in wanted if c in available])
+
+
+def merge_links(link_dfs: list[pl.DataFrame]) -> pl.lazyframe.LazyFrame:
+    """Merge the linking tables prioritising the first non-empty link for an interaction to output."""
+
+    # Add a priority for deduplication: lower number = higher priority
+    def _with_priority(df: pl.DataFrame, prio: int) -> pl.DataFrame:
+        # Always add the helper priority column, even on empty frames, to ensure consistent width
+        return df.with_columns(pl.lit(prio).alias("_priority"))
+
+    if all(df.is_empty() for df in link_dfs):
+        raise ValueError("All provided DataFrames are empty — cannot continue.")
+
+    return (
+        pl.concat(
+            [_with_priority(df, i) for i, df in enumerate(link_dfs)],
+            how="vertical",
+            rechunk=True,
+        )
+        .sort(["_priority"])
+        .unique(subset=["interaction_id", "outcome_id"], keep="first")
+        .drop("_priority")
+    ).lazy()

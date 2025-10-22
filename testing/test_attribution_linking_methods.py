@@ -48,6 +48,7 @@ class TestAttributionLinkingMethods(unittest.TestCase):
                 "interacted_person_id": ["P1", None],
                 "interacted_company_id": ["C2", "C2"],
                 "marketing_activity_id": ["A1", "A2"],
+                "interaction_type": ["Email", "Email"],
                 "date": [
                     __import__("datetime").datetime(2024, 1, 1),
                     __import__("datetime").datetime(2024, 1, 2),
@@ -76,10 +77,12 @@ class TestAttributionLinkingMethods(unittest.TestCase):
                 "campaign_id": [None, None],
                 "marketing_asset_id": [None, None],
                 "targeted_company_id": [None, None],
+                "channel_id": ["CH1", "CH1"],
             }
         )
         self.campaigns_df = pl.DataFrame({"campaign_id": [], "product_id": []})
         self.assets_df = pl.DataFrame({"marketing_asset_id": [], "product_id": []})
+        self.channels_df = pl.DataFrame({"channel_id": ["CH1"], "name": ["Some Channel"]})
 
         self.prior = {
             "Company": self.company_df,
@@ -91,6 +94,7 @@ class TestAttributionLinkingMethods(unittest.TestCase):
             "Marketing Activity": self.marketing_activity_df,
             "Campaigns": self.campaigns_df,
             "Marketing Assets": self.assets_df,
+            "Channels": self.channels_df,
         }
 
     def test_direct_person_linking_has_priority(self) -> None:
