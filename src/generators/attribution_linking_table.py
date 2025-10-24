@@ -6,24 +6,29 @@ import polars as pl
 
 __all__ = ["generate"]
 
-from src.random_utils import make_ids
+from src.random_utils import make_ids, require_df
 
-_schema = [
-    ("link_id", pl.String),
-    ("marketing_activity_id", pl.String),
-    ("interaction_id", pl.String),
-    ("outcome_type", pl.String),
-    ("outcome_id", pl.String),
-    ("company_id", pl.String),
-    ("person_id", pl.String),
-    ("relation_type", pl.String),
-    ("product_yca_tier", pl.String),
-    ("company_yca_type", pl.String),
-    ("time_lag", pl.Int64),
-    # Additional fields expected by spreadsheet
-    ("interaction_type", pl.String),
-    ("channel_name", pl.String),
-]
+_schema_base = {
+    "interaction_id": pl.String,
+    "outcome_type": pl.String,
+    "outcome_id": pl.String,
+    "company_id": pl.String,
+    "relation_type": pl.String,
+}
+_schema_time_lag = {
+    **_schema_base,
+    "time_lag": pl.Int64,
+}
+_schema_enriched = {
+    "link_id": pl.String,
+    "marketing_activity_id": pl.String,
+    **_schema_time_lag,
+    "person_id": pl.String,
+    "interaction_type": pl.String,
+    "channel_name": pl.String,
+    "product_yca_tier": pl.String,
+    "company_yca_type": pl.String,
+}
 
 
 def _create_ancestry(df: pl.DataFrame, *, row_id: str, parent_id: str) -> pl.DataFrame:
@@ -90,17 +95,54 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
     # enforce identical column order before stacking
     wanted_cols = ["from_id", "to_id", "ancestor_id", "degrees"]
 
-    links_min_df = links_min.collect(streaming=True)
+    links_min_df = links_min.collect()
     df1 = links_min_df.rename({"node_a": "from_id", "node_b": "to_id"}).select(wanted_cols)
     df2 = links_min_df.rename({"node_a": "to_id", "node_b": "from_id"}).select(wanted_cols)
     # Remove any duplicated ordered pairs (e.g., self-pairs A==B would appear twice)
     return pl.concat([df1, df2], how="vertical").unique().sort(["from_id", "to_id"])
 
 
-def _define_schema() -> pl.DataFrame:
+def _find_shortest_links(closure: pl.DataFrame) -> pl.DataFrame:
+    """Backward-compatible alias; compute symmetric shortest links between nodes.
+
+    Historically exported as `_find_shortest_links`; implementation is identical to `_build_links`.
+    :param closure: DataFrame with columns [origin_id, ancestor_id, distance]
+    :returns: Symmetric links table [from_id, to_id, ancestor_id, degrees]
+    """
+    return _build_links(closure)
+
+
+def _compute_product_yca(  # noqa PLR0913 Too many arguments in function definition (6 > 5)
+    rows: pl.DataFrame,
+    product_links: pl.DataFrame,
+    products_df: pl.DataFrame,
+    *,
+    outcome_col: str,
+    campaign_col: str,
+    asset_col: str,
+) -> pl.Series:
+    """Backward-compatible alias for `_best_product_yca_level`.
+
+    Returns the product_yca_tier Series aligned to the given rows.
+    """
+    return _best_product_yca_level(
+        rows,
+        product_links,
+        products_df,
+        outcome_col=outcome_col,
+        campaign_col=campaign_col,
+        asset_col=asset_col,
+    )
+
+
+def _define_schema(stage: str) -> pl.DataFrame:
     """Define the Expected return schema."""
     # Create an empty DataFrame
-    return pl.DataFrame(schema=_schema)
+    if stage == "base":
+        return pl.DataFrame(schema=_schema_base)
+    if stage == "enriched":
+        return pl.DataFrame(schema=_schema_enriched)
+    raise ValueError(f"Invalid stage: {stage} should be 'base' or 'enriched'")
 
 
 def _best_product_yca_level(  # noqa: PLR0913
@@ -240,12 +282,6 @@ def _best_company_yca_type(
     )
 
 
-def _require_df(value: Any, name: str) -> pl.DataFrame:
-    if not isinstance(value, pl.DataFrame):
-        raise TypeError(f"Expected DataFrame for {name}, got {type(value).__name__}")
-    return value
-
-
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate the attribution linking table deterministically from existing data.
 
@@ -260,19 +296,15 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """
     prior: dict[str, pl.DataFrame] = kwargs.get("prior", {})
 
-    interaction_df = _require_df(prior.get("Interactions"), "Interaction")
-    person_df = _require_df(prior.get("Person"), "Person")
-    company_df = _require_df(prior.get("Company"), "Company")
-    order_df = _require_df(prior.get("Orders"), "Order")
-    person_company_role_df = _require_df(prior.get("Person Company Role"), "Person Company Role")
-    marketing_activity_df = _require_df(prior.get("Marketing Activity"), "Marketing Activity")
-    channel_df = _require_df(prior.get("Channels"), "Channel")
+    interaction_df = require_df(prior.get("Interactions"), "Interaction")
+    # person_df = require_df(prior.get("Person"), "Person")
+    company_df = require_df(prior.get("Company"), "Company")
+    order_df = require_df(prior.get("Orders"), "Order")
+    channel_df = require_df(prior.get("Channels"), "Channel")
 
-    # Build all link types
+    # Build all link types (omit role-based path)
     direct_person_links = _generate_links_direct_person(interaction_df, order_df)
-    person_company_link_df = _generate_links_though_person_company(
-        person_df, interaction_df, company_df, order_df, person_company_role_df
-    )
+    person_company_link_df = _define_schema("base")  # no-op placeholder
     company_only_links = _generate_links_company_only(interaction_df, company_df, order_df)
 
     df = merge_links([direct_person_links, person_company_link_df, company_only_links])
@@ -281,10 +313,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     filtered_links = _date_difference_filter(df, interaction_df, order_df)
 
     # ---------- Enrichment (Product YCA tier and Company YCA type) ----------
-    products_df = _require_df(prior.get("Products"), "Products")
-    marketing_activity_df = _require_df(prior.get("Marketing Activity"), "Marketing Activity")
-    campaigns_df = _require_df(prior.get("Campaigns"), "Campaigns")
-    assets_df = _require_df(prior.get("Marketing Assets"), "Marketing Assets")
+    products_df = require_df(prior.get("Products"), "Products")
+    marketing_activity_df = require_df(prior.get("Marketing Activity"), "Marketing Activity")
+    campaigns_df = require_df(prior.get("Campaigns"), "Campaigns")
+    assets_df = require_df(prior.get("Marketing Assets"), "Marketing Assets")
 
     can_enrich = all(
         isinstance(df, pl.DataFrame)
@@ -312,118 +344,111 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         company_links = _build_links(company_closure)
 
         # Bring in product IDs and company IDs using a lazy, streaming pipeline
-        rows = (
-            filtered_links.lazy()
-            # 1) outcome product and company via Orders
-            .join(
-                order_df.select(["order_id", "product_id", "company_id"])
-                .rename(
-                    {
-                        "order_id": "_outcome_id",
-                        "product_id": "outcome_product_id",
-                        "company_id": "outcome_company_id",
-                    }
-                )
-                .lazy(),
-                left_on="outcome_id",
-                right_on="_outcome_id",
-                how="left",
+        lf = filtered_links.lazy()
+
+        # 1) outcome product and company via Orders
+        lf_with_orders = lf.join(
+            order_df.select(["order_id", "product_id", "company_id"])
+            .rename(
+                {
+                    "order_id": "_outcome_id",
+                    "product_id": "outcome_product_id",
+                    "company_id": "outcome_company_id",
+                }
             )
-            # 2) add marketing_activity_id and interacted_company_id via Interactions
-            .join(
+            .lazy(),
+            left_on="outcome_id",
+            right_on="_outcome_id",
+            how="left",
+        )
+
+        # 2) add marketing_activity_id and interacted_company_id via Interactions
+        lf_with_interaction = lf_with_orders.join(
+            (
                 interaction_df.select(
                     [
                         "interaction_id",
                         "marketing_activity_id",
                         "interacted_company_id",
                         "interaction_type",
+                        "interacted_person_id",
                     ]
-                ).lazy(),
-                on="interaction_id",
-                how="left",
-                suffix="_i",
-            ).with_columns(
-                pl.coalesce(
-                    [pl.col("marketing_activity_id_i"), pl.col("marketing_activity_id")]
-                ).alias("marketing_activity_id")
-            )
-            # 3) campaign/asset and targeted_company_id via Marketing Activity
-            .join(
-                marketing_activity_df.select(
-                    [
-                        "marketing_activity_id",
-                        "campaign_id",
-                        "marketing_asset_id",
-                        "targeted_company_id",
-                        "channel_id",
-                    ]
-                ).lazy(),
-                left_on="marketing_activity_id",
-                right_on="marketing_activity_id",
-                how="left",
-            )
-            # 4) campaign product
-            .join(
-                campaigns_df.select(["campaign_id", "product_id"])
-                .rename({"product_id": "campaign_product_id"})
-                .lazy(),
-                on="campaign_id",
-                how="left",
-            )
-            # 5) asset product
-            .join(
-                assets_df.select(["marketing_asset_id", "product_id"])
-                .rename({"product_id": "asset_product_id"})
-                .lazy(),
-                on="marketing_asset_id",
-                how="left",
-            )
-            # 6) Get channel Name from ID
-            .join(
-                channel_df.select(["channel_id", "name"]).rename({"name": "channel_name"}).lazy(),
-                on="channel_id",
-                how="left",
-            )
-            # 7) derive activity_company_id with preference for targeted_company_id
-            .with_columns(
-                pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
-                    "activity_company_id"
-                ),
-                pl.coalesce(
-                    [pl.col("marketing_activity_id_i"), pl.col("marketing_activity_id")]
-                ).alias("marketing_activity_id"),
-                pl.coalesce([pl.col("interaction_type"), pl.col("interaction_type_i")]).alias(
-                    "interaction_type"
-                ),
-            )
-        ).collect(streaming=True)
+                ).lazy()
+            ),
+            on="interaction_id",
+            how="left",
+            suffix="_i",
+        )
+        # 3) campaign/asset and targeted_company_id via Marketing Activity
+        lf_with_ma = lf_with_interaction.join(
+            marketing_activity_df.select(
+                [
+                    "marketing_activity_id",
+                    "campaign_id",
+                    "marketing_asset_id",
+                    "targeted_company_id",
+                    "channel_id",
+                ]
+            ).lazy(),
+            left_on="marketing_activity_id",
+            right_on="marketing_activity_id",
+            how="left",
+        )
+        # 4) campaign product
+        lf_with_campaign = lf_with_ma.join(
+            campaigns_df.select(["campaign_id", "product_id"])
+            .rename({"product_id": "campaign_product_id"})
+            .lazy(),
+            on="campaign_id",
+            how="left",
+        )
+        # 5) asset product
+        lf_with_asset = lf_with_campaign.join(
+            assets_df.select(["marketing_asset_id", "product_id"])
+            .rename({"product_id": "asset_product_id"})
+            .lazy(),
+            on="marketing_asset_id",
+            how="left",
+        )
+        # 6) Get channel Name from ID
+        lf_with_channel = lf_with_asset.join(
+            channel_df.select(["channel_id", "channel_name"]).lazy(),
+            on="channel_id",
+            how="left",
+        )
+        # 7) derive activity_company_id with preference for targeted_company_id
+        df_enriched = lf_with_channel.with_columns(
+            pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
+                "activity_company_id"
+            ),
+            pl.col("interacted_person_id").alias("person_id"),
+        ).collect()
 
         # Compute enrichments
         product_yca_tier = _best_product_yca_level(
-            rows,
+            df_enriched,
             product_links,
             products_df,
             outcome_col="outcome_product_id",
             campaign_col="campaign_product_id",
             asset_col="asset_product_id",
         )
-        rows = rows.with_columns(product_yca_tier)
+        df_enriched = df_enriched.with_columns(product_yca_tier)
 
         # only compute company_yca_type if it wasn't already produced upstream
-        if "company_yca_type" not in rows.columns:
+        if "company_yca_type" not in df_enriched.columns:
             company_yca_type = _best_company_yca_type(
-                rows,
+                df_enriched,
                 company_links,
                 company_df,
                 outcome_company_col="outcome_company_id",
                 activity_company_col="activity_company_id",
             )
-            rows = rows.with_columns(company_yca_type)
+            df_enriched = df_enriched.with_columns(company_yca_type)
 
-        enriched = rows
     else:
         # No enrichment possible: add null columns to satisfy schema
-        enriched = filtered_links.with_columns(
+        df_enriched = filtered_links.with_columns(
             [
                 pl.lit(None).cast(pl.String).alias("product_yca_tier"),
                 pl.lit(None).cast(pl.String).alias("company_yca_type"),
@@ -431,33 +456,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         )
 
     # Generate Link IDs
-    link_ids = pl.Series("link_id", make_ids(enriched.height, "LINK"))
-    result = enriched.with_columns(link_ids)
+    link_ids = pl.Series("link_id", make_ids(df_enriched.height, "LINK"), dtype=pl.String)
+    result = df_enriched.with_columns(link_ids)
 
-    # Align output columns with spreadsheet 'Attributes' if available to avoid extra-field errors
-    reg = kwargs.get("registry")
-    if reg is not None and hasattr(reg, "cfg") and hasattr(reg.cfg, "workbook"):
-        try:
-            import pandas as pd
-
-            pdf = pd.read_excel(reg.cfg.workbook, sheet_name="Attributes")
-            obj_rows = pdf[pdf.get("Object").fillna("").astype(str) == "Attribution Linking Table"]
-            if not obj_rows.empty and "Name" in obj_rows.columns:
-                names = [str(x) for x in obj_rows["Name"].dropna().tolist() if str(x).strip()]
-
-                def _norm(n: str) -> str:
-                    return n.lower().replace(" ", "").replace("_", "")
-
-                expected_norm = {_norm(x) for x in names}
-                mapping = {_norm(c): c for c in result.columns}
-                cols = [mapping[n] for n in expected_norm if n in mapping]
-                if cols:
-                    return result.select(cols)
-        except Exception:
-            # Fall back silently if workbook/attributes not available or parsing fails
-            pass
-
-    return result
+    return result.match_to_schema(_schema_enriched, missing_columns="raise", extra_columns="ignore")
 
 
 def _generate_links_though_person_company(
@@ -514,7 +516,7 @@ def _generate_links_though_person_company(
         )
 
     n = links_raw.height
-    schema = _define_schema()
+    schema = _define_schema("base")
     if n == 0:
         # return an *empty* frame with the right dtypes so downstream code is safe
         return schema
@@ -529,19 +531,8 @@ def _generate_links_though_person_company(
             "interacted_person_id": "person_id",
         }
     )
-    return (
-        links_calculated.with_columns(
-            [
-                pl.lit(None).cast(dt).alias(col)
-                for col, dt in _schema
-                if col not in links_calculated.columns
-            ]
-        )
-        .select([col for col, _ in _schema])
-        .with_columns(
-            pl.col("time_lag").cast(pl.Int64),
-            pl.all().exclude("time_lag").cast(pl.String),
-        )
+    return links_calculated.match_to_schema(
+        _schema_base, missing_columns="raise", extra_columns="ignore"
     )
 
 
@@ -557,7 +548,7 @@ def _generate_links_direct_person(
     :raises ValueError: If required columns are missing.
     """
     required_i = {"interaction_id", "interacted_person_id"}
-    required_o = {"order_id", "contact_id", "company_id"}
+    required_o = {"order_id", "person_id", "company_id"}
     if not required_i.issubset(interaction_df.columns):  # pragma: no cover
         raise ValueError("Interactions missing required columns for direct person linking")
     if not required_o.issubset(order_df.columns):  # pragma: no cover
@@ -566,9 +557,9 @@ def _generate_links_direct_person(
     df = (
         interaction_df.filter(pl.col("interacted_person_id").is_not_null())
         .join(
-            order_df.select(["order_id", "contact_id", "company_id"]),
+            order_df.select(["order_id", "person_id", "company_id"]),
             left_on="interacted_person_id",
-            right_on="contact_id",
+            right_on="person_id",
             how="inner",
         )
         .with_columns(
@@ -580,43 +571,20 @@ def _generate_links_direct_person(
                 "interaction_id": "interaction_id",
                 "order_id": "outcome_id",
                 "interacted_person_id": "person_id",
-                # keep company_id from Orders join
             }
         )
-        .select(
-            [
-                col
-                for col, _ in _schema
-                if col
-                in (
-                    "interaction_id",
-                    "outcome_type",
-                    "outcome_id",
-                    "company_id",
-                    "person_id",
-                    "relation_type",
-                )
-            ]
+        .with_columns(
+            # Set company_id from the interaction context to align with expectations
+            pl.col("interacted_company_id").alias("company_id")
         )
+        .match_to_schema(_schema_base, missing_columns="raise", extra_columns="ignore")
     )
 
     if df.is_empty():
-        return _define_schema()
+        return _define_schema("base")
 
     # Add any missing columns as nulls and cast types
-    return (
-        df.with_columns(
-            [pl.lit(None).cast(dt).alias(col) for col, dt in _schema if col not in df.columns]
-        )
-        .select([name for name, _ in _schema])
-        .with_columns(
-            pl.col("time_lag").cast(pl.Int64),
-            pl.all().exclude("time_lag").cast(pl.String),
-        )
-    )
-
-
-essential_company_cols = ["company_id", "Parent_Company_ID", "Company Business Type"]
+    return df.match_to_schema(_schema_base, missing_columns="raise")
 
 
 def _generate_links_company_only(
@@ -639,7 +607,7 @@ def _generate_links_company_only(
         pl.col("interacted_person_id").is_null() & pl.col("interacted_company_id").is_not_null()
     )
     if base.is_empty():
-        return _define_schema()
+        return _define_schema("base")
 
     # Build company links once
     comp_closure = _create_ancestry(company_df, row_id="company_id", parent_id="Parent_Company_ID")
@@ -647,7 +615,7 @@ def _generate_links_company_only(
 
     # Lazily join interaction company to orders via ancestry links
     o_cols = ["order_id", "company_id"]
-    df_lazy = (
+    lf = (
         base.select(["interaction_id", "interacted_company_id"])
         .lazy()
         .join(
@@ -661,33 +629,12 @@ def _generate_links_company_only(
             pl.lit("Order").alias("outcome_type"),
             pl.lit("Interaction-Company-Order").alias("relation_type"),
         )
-        .rename({"order_id": "outcome_id"})
+        .rename({"order_id": "outcome_id", "to_id": "company_id"})
     )
 
-    df = df_lazy.collect(streaming=True).with_columns(pl.col("to_id").alias("company_id"))
-
-    # Keep schema-relevant columns; person_id null
-    df2 = df.select(
-        [
-            pl.col("interaction_id"),
-            pl.col("outcome_type"),
-            pl.col("outcome_id"),
-            pl.col("company_id"),  # from Orders
-            pl.lit(None).cast(pl.String).alias("person_id"),
-            pl.col("relation_type"),
-        ]
-    )
-
-    return (
-        df2.with_columns(
-            [pl.lit(None).cast(dt).alias(col) for col, dt in _schema if col not in df2.columns]
-        )
-        .select([name for name, _ in _schema])
-        .with_columns(
-            pl.col("time_lag").cast(pl.Int64),
-            pl.all().exclude("time_lag").cast(pl.String),
-        )
-    )
+    return lf.match_to_schema(
+        _schema_base, missing_columns="raise", extra_columns="ignore"
+    ).collect()
 
 
 def _date_difference_filter(
@@ -698,13 +645,17 @@ def _date_difference_filter(
     Uses lazy streaming joins to reduce peak memory.
     """
     # check we have the necessary interaction ID and outcome ID
-    missing = [c for c in ("interaction_id", "outcome_id") if c not in link.columns]
+    missing = [
+        c for c in ("interaction_id", "outcome_id") if c not in link.collect_schema().names()
+    ]
     if missing:  # pragma: no cover
         raise ValueError(f"Required column(s) missing: {', '.join(missing)}")
 
     # Determine interaction date column name ('interactiondate' preferred, fallback to 'date')
     interaction_date_col = (
-        "interactiondate" if "interactiondate" in interaction_df.columns else "date"
+        "interaction_date"
+        if "interaction_date" in interaction_df.columns
+        else ("interactiondate" if "interactiondate" in interaction_df.columns else "date")
     )
 
     lf = (
@@ -728,23 +679,10 @@ def _date_difference_filter(
             .alias("time_lag")
         )
         .drop("_lag")
-        # 3. final column order
-        .select([name for name, _ in _schema])
     )
-    return _safe_schema_select(lf).collect(streaming=True)
-
-
-def _safe_schema_select(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame | pl.DataFrame:
-    """Select only columns that both exist on `frame` and appear in `_schema`."""
-    wanted = [name for name, _ in _schema]
-    if isinstance(frame, pl.LazyFrame):
-        # On modern Polars, LazyFrame.schema is dict-like; iterating yields column names.
-        available = set(
-            frame.schema
-        )  # if on older Polars, use: set(frame.collect_schema().names())
-        return frame.select([pl.col(c) for c in wanted if c in available])
-    available = set(frame.columns)
-    return frame.select([c for c in wanted if c in available])
+    return lf.match_to_schema(
+        _schema_time_lag, missing_columns="raise", extra_columns="ignore"
+    ).collect()
 
 
 def merge_links(link_dfs: list[pl.DataFrame]) -> pl.lazyframe.LazyFrame:
@@ -756,7 +694,8 @@ def merge_links(link_dfs: list[pl.DataFrame]) -> pl.lazyframe.LazyFrame:
         return df.with_columns(pl.lit(prio).alias("_priority"))
 
     if all(df.is_empty() for df in link_dfs):
-        raise ValueError("All provided DataFrames are empty — cannot continue.")
+        # No links could be established; return an empty frame with correct schema lazily
+        return _define_schema("base").lazy()
 
     return (
         pl.concat(

@@ -1,6 +1,6 @@
 """Tests for IP Company Match interactions ensuring company is populated when person is unknown.
 
-This specifically verifies that when identificationmethod == 'IP Company Match' and
+This specifically verifies that when identification_method == 'IP Company Match' and
 interacted_person_id is cleared to None, interacted_company_id is still populated
 (either from targeted_company_id or from the Company table as a fallback).
 """
@@ -52,14 +52,14 @@ def test_ip_company_match_populates_company() -> None:
 
     # Focus on rows that were IP-matched and had person cleared
     ip_rows = df.filter(
-        (pl.col("identificationmethod") == "IP Company Match")
+        (pl.col("identification_method_type") == "IP Company Match")
         & pl.col("interacted_person_id").is_null()
     )
 
     # If none were produced due to randomness, relax by asserting no IP rows have null company
     if ip_rows.is_empty():
         # For any IP Company Match row, company must be non-null
-        ip_any = df.filter(pl.col("identificationmethod") == "IP Company Match")
+        ip_any = df.filter(pl.col("identification_method_type") == "IP Company Match")
         assert (
             ip_any.is_empty()
             or ip_any.select(pl.col("interacted_company_id").is_null().any()).item() is False

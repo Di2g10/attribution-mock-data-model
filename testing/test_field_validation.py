@@ -115,12 +115,16 @@ class TestFieldValidation(unittest.TestCase):
             # Check for missing fields
             missing_fields = expected_fields - actual_fields
             if missing_fields:
-                error_messages.append(f"Object '{obj_name}' is missing fields: {missing_fields}")
+                error_messages.append(
+                    f"Object '{obj_name}' is missing fields: {missing_fields} it has fields: {actual_fields}"
+                )
 
             # Check for extra fields
             extra_fields = actual_fields - expected_fields
             if extra_fields:
-                error_messages.append(f"Object '{obj_name}' has extra fields: {extra_fields}")
+                error_messages.append(
+                    f"Object '{obj_name}' has extra fields: {extra_fields} it has fields: {actual_fields}"
+                )
 
             # If no errors for this object, print success
             if not (missing_fields or extra_fields):

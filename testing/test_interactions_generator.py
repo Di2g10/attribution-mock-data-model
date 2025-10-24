@@ -89,13 +89,13 @@ def test_interactions_with_related_objects() -> None:
     ), f"Unexpected activity IDs: {activities - activity_ids}"
 
     # --- Test 4: Follow-up interactions share the same person as their reference ---
-    follow_ups = df.filter(pl.col("followfrominteraction").is_not_null())
+    follow_ups = df.filter(pl.col("follow_from_interaction_id").is_not_null())
     if follow_ups.height > 0:
         lookup = df.select(["interaction_id", "interacted_person_id"]).to_dict(as_series=False)
         id_to_person = dict(zip(lookup["interaction_id"], lookup["interacted_person_id"]))
 
         for row in follow_ups.iter_rows(named=True):
-            follow_from_id = row["followfrominteraction"]
+            follow_from_id = row["follow_from_interaction_id"]
             person_id = row["interacted_person_id"]
             assert person_id == id_to_person.get(
                 follow_from_id

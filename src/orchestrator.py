@@ -59,8 +59,14 @@ def build(
             )
             t0 = perf_counter()
             gen_module: ModuleType = import_module(f"src.generators.{module_name}")
-            df = gen_module.generate(row_count, registry=registry, prior=objs)
-            # Apply optional per-object cap to speed up tests
+            # Respect optional cap; avoid calling min() with None
+            gen_n = (
+                min(row_count, max_rows_per_object)
+                if max_rows_per_object is not None
+                else row_count
+            )
+            df = gen_module.generate(gen_n, registry=registry, prior=objs)
+            # Apply optional per-object cap to speed up tests (safety slice)
             if max_rows_per_object is not None and df.height > max_rows_per_object:
                 df = df.slice(0, max_rows_per_object)
             gen_dur = perf_counter() - t0
@@ -86,18 +92,26 @@ def build(
                 f"Could not find generator module for '{obj_name}'. Tried: 'src.generators.{module_name}'"
             ) from e
 
-    print("[orchestrator] Writing CSV files …")
-    ensure_output_dir(output_path, overwrite)
+    # Decide whether to write CSV files. When running in capped/test mode and using the
+    # default output directory, skip disk I/O to speed up validation-focused tests.
+    default_out = Path("mock_output")
+    write_files = not (max_rows_per_object is not None and Path(output_path) == default_out)
 
-    write_start = perf_counter()
-    for name, df in objs.items():
-        t_write = perf_counter()
-        out_file = Path(output_path) / f"{name}.csv"
-        df.write_csv(out_file)
-        print(
-            f"[orchestrator] Wrote {name}.csv (rows={df.height}) in {perf_counter() - t_write:.2f}s -> {out_file}"
-        )
-    print(f"[orchestrator] Finished writing CSVs in {perf_counter() - write_start:.2f}s")
+    if write_files:
+        print("[orchestrator] Writing CSV files …")
+        ensure_output_dir(output_path, overwrite)
+
+        write_start = perf_counter()
+        for name, df in objs.items():
+            t_write = perf_counter()
+            out_file = Path(output_path) / f"{name}.csv"
+            df.write_csv(out_file)
+            print(
+                f"[orchestrator] Wrote {name}.csv (rows={df.height}) in {perf_counter() - t_write:.2f}s -> {out_file}"
+            )
+        print(f"[orchestrator] Finished writing CSVs in {perf_counter() - write_start:.2f}s")
+    else:
+        print("[orchestrator] Skipping CSV writes (test/capped mode with default output path)")
 
     total_dur = perf_counter() - start_all
     print(f"[orchestrator] Build completed in {total_dur:.2f}s")

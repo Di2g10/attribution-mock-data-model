@@ -8,7 +8,6 @@ from src.generators.company import generate as generate_company
 from src.generators.person import generate as generate_person
 from src.generators.products import generate as generate_products
 from src.generators.interactions import generate as generate_interactions
-from src.generators.person_company_role import generate as generate_person_company_role
 from src.generators.channels import generate as generate_channels
 from src.generators.marketing_assets import generate as generate_marketing_assets
 from src.generators.marketing_activity import generate as generate_marketing_activity
@@ -135,19 +134,11 @@ def interactions_df(
 
 
 @pytest.fixture(scope="module")
-def person_company_role_df(company_df: pl.DataFrame, person_df: pl.DataFrame) -> pl.DataFrame:
-    """Generate person-company role relationships for testing."""
-    prior = {"Company": company_df, "Person": person_df}
-    return generate_person_company_role(SMALL_SAMPLE_SIZE, prior=prior)
-
-
-@pytest.fixture(scope="module")
 def orders_df(
     company_df: pl.DataFrame,
     person_df: pl.DataFrame,
     products_df: pl.DataFrame,
     interactions_df: pl.DataFrame,
-    person_company_role_df: pl.DataFrame,
 ) -> pl.DataFrame:
     """Full Orders DataFrame with rich prior context."""
     prior = {
@@ -155,7 +146,6 @@ def orders_df(
         "Person": person_df,
         "Products": products_df,
         "Interactions": interactions_df,
-        "PersonCompanyRole": person_company_role_df,
     }
     return generate_orders(SMALL_SAMPLE_SIZE, prior=prior)
 
@@ -206,7 +196,7 @@ def test_order_amounts(basic_prior: dict[str, pl.DataFrame]) -> None:
 
 def test_contact_links_to_person(orders_df: pl.DataFrame, person_df: pl.DataFrame) -> None:
     """Test that order contacts are valid person IDs from the person data."""
-    contact_ids = set(orders_df.select("contact_id").to_series().drop_nulls())
+    contact_ids = set(orders_df.select("person_id").to_series().drop_nulls())
     person_ids = set(person_df.select("person_id").to_series())
     assert contact_ids.intersection(person_ids)
 
@@ -229,9 +219,9 @@ def test_contact_consistent_with_company(
         comp, pers = row.get("interacted_company_id"), row.get("interacted_person_id")
         if comp and pers:
             mapping.setdefault(comp, set()).add(pers)
-    df = orders_df.filter(pl.col("company_id").is_not_null() & pl.col("contact_id").is_not_null())
+    df = orders_df.filter(pl.col("company_id").is_not_null() & pl.col("person_id").is_not_null())
     for row in df.iter_rows(named=True):
-        comp, cont = row.get("company_id"), row.get("contact_id")
+        comp, cont = row.get("company_id"), row.get("person_id")
         if comp in mapping:
             assert cont in mapping[comp]
 
@@ -248,23 +238,10 @@ def test_causal_interaction_consistency(
     orders_df: pl.DataFrame, interactions_df: pl.DataFrame
 ) -> None:
     """Test that causal interactions occur before orders and within the expected timeframe."""
-    int_map = dict(zip(interactions_df["interaction_id"], interactions_df["date"]))
+    int_map = dict(zip(interactions_df["interaction_id"], interactions_df["interaction_date"]))
     df = orders_df.filter(pl.col("causal_interaction_id").is_not_null())
     for row in df.iter_rows(named=True):
         ci_date = int_map.get(row["causal_interaction_id"])
         if ci_date:
             diff = (row["date_raised"] - ci_date).days
             assert 0 <= diff <= MAX_DAYS_INTERACTION_TO_ORDER
-
-
-def test_orders_respect_person_company_roles(
-    orders_df: pl.DataFrame, person_company_role_df: pl.DataFrame
-) -> None:
-    """Test that orders respect the established person-company relationships."""
-    role_map: dict[str, set[str]] = {}
-    for row in person_company_role_df.iter_rows(named=True):
-        role_map.setdefault(row["person_id"], set()).add(row["company_id"])
-    df = orders_df.filter(pl.col("company_id").is_not_null() & pl.col("contact_id").is_not_null())
-    for row in df.iter_rows(named=True):
-        if row["contact_id"] in role_map:
-            assert row["company_id"] in role_map[row["contact_id"]]

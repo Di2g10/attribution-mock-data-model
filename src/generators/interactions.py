@@ -7,7 +7,14 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import polars as pl
 
-from ..random_utils import fake, generate_mapped_values, make_ids, random_date, weighted_sample
+from ..random_utils import (
+    fake,
+    generate_mapped_values,
+    make_ids,
+    random_date,
+    weighted_sample,
+    require_df,
+)
 
 __all__ = [
     "create_interactions_dataframe",
@@ -360,7 +367,7 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "interaction_id": data.ids,
-            "identificationmethod": weighted_sample(
+            "identification_method_type": weighted_sample(
                 [
                     "Known From outbound Communication",
                     "Self Identification",
@@ -373,7 +380,7 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
             ),
             "channel": data.channels,
             "interaction_type": data.interaction_types,
-            "datasource": weighted_sample(
+            "data_source_name": weighted_sample(
                 ["CRM", "Marketing Automation", "Web Analytics", "Social Media", "Survey"],
                 [0.3, 0.2, 0.2, 0.2, 0.1],
                 data.n,
@@ -381,9 +388,9 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
             "interacted Person ID": person_interacted,
             "interacted Company ID": company_interacted,
             "marketing_activity_id": activity,
-            "date": data.interaction_dates,
-            "duration": data.durations,
-            "followfrominteraction": followfrom_interactions,
+            "interaction_date": data.interaction_dates,
+            "interaction_dur": data.durations,
+            "follow_from_interaction_id": followfrom_interactions,
         }
     )
 
@@ -400,7 +407,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     registry = kwargs.get("registry")
 
     # --- 1. Gather activities from Push and Pull sources ---
-    marketing_activity_df = prior.get("Marketing Activity")
+    marketing_activity_df = require_df(prior.get("Marketing Activity"), "Marketing Activity")
     if marketing_activity_df is None or not {
         "marketing_activity_id",
         "targeted_person_id",
@@ -455,12 +462,12 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     sampled_df = activities_df.sample(n=n, with_replacement=True).with_columns(
         [
             pl.Series("interaction_id", interaction_ids),
-            pl.Series("date", [random_date() for _ in range(n)]),
-            pl.Series("duration", [fake.random_int(1, 120) for _ in range(n)]),
+            pl.Series("interaction_date", [random_date() for _ in range(n)]),
+            pl.Series("interaction_dur", [fake.random_int(1, 120) for _ in range(n)]),
         ]
     )
 
-    # --- 4. Assign followfrominteraction with memory-efficient tracking ---
+    # --- 4. Assign follow_from_interaction_id with memory-efficient tracking ---
     followfrom: list[str | None] = [None] * n
     last_seen_by_person: dict[str, str] = {}
     follow_on_likelihood = 0.2
@@ -477,7 +484,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             last_seen_by_person[person] = sampled_df[i, "interaction_id"]
 
     sampled_df = sampled_df.with_columns(
-        pl.Series("followfrominteraction", followfrom),
+        pl.Series("follow_from_interaction_id", followfrom),
     )
 
     # --- 5. Add remaining columns (channel, type, metadata) ---
@@ -493,7 +500,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             pl.Series("channel", channels),
             pl.Series("interaction_type", interaction_types),
             pl.Series(
-                "identificationmethod",
+                "identification_method_type",
                 weighted_sample(
                     [
                         "Known From outbound Communication",
@@ -507,7 +514,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 ),
             ),
             pl.Series(
-                "datasource",
+                "data_source_name",
                 weighted_sample(
                     ["CRM", "Marketing Automation", "Web Analytics", "Social Media", "Survey"],
                     [0.3, 0.2, 0.2, 0.2, 0.1],
@@ -519,19 +526,28 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # For IP-based identification, person may be unknown while company is known.
     # Force interacted_person_id to None in those cases to enable company-only linkage downstream.
-    sampled_df = sampled_df.with_columns(
-        [
-            # mark whether this interaction is referenced by any follow-up
-            pl.col("interaction_id")
-            .is_in(sampled_df.select("followfrominteraction").drop_nulls().unique().to_series())
-            .alias("_is_referenced"),
-        ]
+    refs = (
+        sampled_df.select(
+            pl.col("follow_from_interaction_id").cast(pl.Utf8).alias("interaction_id")
+        )
+        .drop_nulls()
+        .unique()
+    )
+
+    sampled_df = (
+        sampled_df.join(
+            refs.with_columns(pl.lit(True).alias("_is_referenced_flag")),
+            on="interaction_id",
+            how="left",
+        )
+        .with_columns(pl.col("_is_referenced_flag").fill_null(False).alias("_is_referenced"))
+        .drop("_is_referenced_flag")
     )
 
     sampled_df = sampled_df.with_columns(
         pl.when(
-            (pl.col("identificationmethod") == "IP Company Match")
-            & pl.col("followfrominteraction").is_null()
+            (pl.col("identification_method_type") == "IP Company Match")
+            & pl.col("follow_from_interaction_id").is_null()
             & (~pl.col("_is_referenced"))
             & pl.col("interacted_company_id").is_null()
         )
@@ -553,7 +569,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         sampled_df = sampled_df.with_columns(pl.lit(fallback_company).alias("_ip_fill_company"))
         sampled_df = sampled_df.with_columns(
             pl.when(
-                (pl.col("identificationmethod") == "IP Company Match")
+                (pl.col("identification_method_type") == "IP Company Match")
                 & pl.col("interacted_company_id").is_null()
             )
             .then(pl.col("_ip_fill_company"))
@@ -599,21 +615,9 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Ensure duration type is integer
     sampled_df = sampled_df.with_columns(
         [
-            pl.col("duration").cast(pl.Int64, strict=False),
+            pl.col("interaction_dur").cast(pl.Int64, strict=False),
         ]
     )
-
-    # When called by the orchestrator (registry provided), align column names to spreadsheet
-    if registry is not None:
-        sampled_df = sampled_df.rename(
-            {
-                "date": "interactiondate",
-                "identificationmethod": "identificationmethodtype",
-                "duration": "interactiondur",
-                "followfrominteraction": "followfrominteractionid",
-                "datasource": "datasourcename",
-            }
-        ).with_columns(pl.col("interactiondur").cast(pl.Int64, strict=False))
 
     # Optionally drop channel column to maintain prior behaviour
     if kwargs.get("keep_channel", False):

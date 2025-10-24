@@ -65,7 +65,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ch_type = fake.random_element(DEFAULT_CHANNEL_TYPES)
         seed_rows.append(
             {
-                "Name": f"{ch_type} {randint(1, 9)}",  # type-flavoured name
+                "Channel Name": f"{ch_type} {randint(1, 9)}",  # type-flavoured name
                 "Group": fake.random_element(DEFAULT_GROUPS),
                 "Identifiable method": fake.random_element(DEFAULT_METHODS),
                 "Type": ch_type,
@@ -79,7 +79,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     df = pl.DataFrame(
         {
             "channel_id": make_ids(n, "CHAN"),
-            "name": [r["Name"] for r in rows],
+            "channel_name": [r["Channel Name"] for r in rows],
             "group": [r["Group"] for r in rows],
             # "identifiable_method": [r["Identifiable method"] for r in rows],
             "type": [r["Type"] for r in rows],

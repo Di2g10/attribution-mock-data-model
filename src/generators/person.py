@@ -58,8 +58,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     ids = make_ids(n, "PER")
 
     # Choose a company for each person (allow duplicates); None if not available
-    companyid: list[str | None]
-    companyid = weighted_sample(company_ids, n=n) if company_ids else [None] * n
+    company_id: list[str | None]
+    company_id = weighted_sample(company_ids, n=n) if company_ids else [None] * n
 
     # Generate person data
     return pl.DataFrame(
@@ -71,7 +71,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 [0.2, 0.3, 0.2, 0.15, 0.15],
                 n,
             ),
-            "companyid": companyid,
+            "company_id": company_id,
             "source_id": [f"SRC{fake.random_int(min=1000, max=9999)}" for _ in ids],
             "source_table": weighted_sample(
                 ["CRM", "Marketing Automation", "Web Form", "Manual Entry", "Import"],

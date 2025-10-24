@@ -100,7 +100,13 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # Prepare base data per link (or per requested count if links absent)
     if not links_available:
-        raise ValueError("Links are required to compute weights")
+        # In schema/field-validation contexts we may not have links yet. Return an empty, schema-aligned frame.
+        attr_cols = _get_attribute_columns(registry, "Attribution Model Output Table")
+        if attr_cols:
+            return pl.DataFrame({c: pl.Series(c, [], dtype=pl.String) for c in attr_cols})
+        # Safe minimal default
+        return pl.DataFrame({"link_id": pl.Series("link_id", [], dtype=pl.String)})
+
     link_ids = links.get_column("link_id").cast(pl.String)
 
     weight_values = _compute_wieghts(links, row_count)

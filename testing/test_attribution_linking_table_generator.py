@@ -5,8 +5,8 @@ import polars as pl
 
 from src.generators.attribution_linking_table import (
     _create_ancestry,
-    _build_links,
-    _best_product_yca_level,
+    _find_shortest_links,
+    _compute_product_yca,
 )
 
 
@@ -34,7 +34,7 @@ class TestBestProductYCA(unittest.TestCase):
         closure = _create_ancestry(
             self.products, row_id="product_id", parent_id="product_parent_id"
         )
-        self.links = _build_links(closure)
+        self.links = _find_shortest_links(closure)
 
     def test_prefers_closest_campaign(self) -> None:
         """When campaign is closer, use it."""
@@ -46,7 +46,7 @@ class TestBestProductYCA(unittest.TestCase):
                 "asset_product_id": ["P3"],
             }
         )
-        result = _best_product_yca_level(
+        result = _compute_product_yca(
             rows,
             self.links,
             self.products,
@@ -66,7 +66,7 @@ class TestBestProductYCA(unittest.TestCase):
                 "asset_product_id": ["P2"],
             }
         )
-        result = _best_product_yca_level(
+        result = _compute_product_yca(
             rows,
             self.links,
             self.products,
@@ -85,7 +85,7 @@ class TestBestProductYCA(unittest.TestCase):
                 "asset_product_id": [None],
             }
         )
-        result = _best_product_yca_level(
+        result = _compute_product_yca(
             rows,
             self.links,
             self.products,
@@ -170,7 +170,7 @@ class TestBuildLinks(unittest.TestCase):
             }
         )
         cls.closure = _create_ancestry(cls.df, row_id="company_id", parent_id="parent_id")
-        cls.links = _build_links(cls.closure)
+        cls.links = _find_shortest_links(cls.closure)
 
     # ------------------------------------------------------------------
     def test_schema(self) -> None:
@@ -246,7 +246,7 @@ class TestStringIds(unittest.TestCase):
             }
         )
         cls.closure = _create_ancestry(cls.df, row_id="company_id", parent_id="parent_id")
-        cls.links = _build_links(cls.closure)
+        cls.links = _find_shortest_links(cls.closure)
 
     # ------------------------------------------------------------------
     def test_closure_rows_string_ids(self) -> None:

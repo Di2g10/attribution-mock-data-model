@@ -44,15 +44,13 @@ class SchemaRegistry:
     _DEFAULT_ORDER: ClassVar[list[str]] = [
         "Company",
         "Person",
-        "Person Company Role",
         "Products",
         "Channels",
         "Facilitation Tool",
         "Marketing Assets",
         "Audience",
         "Campaigns",
-        "Push Activity",
-        "Pull Activity",
+        "Marketing Activity",
         "Interactions",
         "Orders",
         "Attribution Linking Table",
@@ -85,10 +83,6 @@ class SchemaRegistry:
         # Normalise column names once, to enable flexible matching
         rename_map = {col: _norm(col) for col in objects_df.columns}
         objects_df = objects_df.rename(rename_map)
-
-        # If generation_order present, sort ascending (1,2,3,...)
-        if "generation_order" in objects_df.columns:
-            objects_df = objects_df.sort(by="generation_order", descending=False)
 
         # Build objects
         parsed: dict[str, dict[str, Any]] = {}
@@ -138,10 +132,9 @@ class SchemaRegistry:
             }
             order.append(name)
 
-        # If no explicit generation_order provided, impose DEFAULT precedence
-        if "generation_order" not in objects_df.columns:
-            precedence = {n: i for i, n in enumerate(self._DEFAULT_ORDER)}
-            order.sort(key=lambda n: precedence.get(n, len(precedence)))
+        # set order of precedence
+        precedence = {n: i for i, n in enumerate(self._DEFAULT_ORDER)}
+        order.sort(key=lambda n: precedence.get(n, len(precedence)))
 
         self._objects = parsed
         self._order = order

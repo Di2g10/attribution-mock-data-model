@@ -7,7 +7,14 @@ from datetime import timedelta
 
 import polars as pl
 
-from ..random_utils import fake, make_ids, random_date, make_ids_with_duplicates, weighted_sample
+from ..random_utils import (
+    fake,
+    make_ids,
+    random_date,
+    make_ids_with_duplicates,
+    weighted_sample,
+    require_df,
+)
 
 __all__ = ["generate"]
 
@@ -264,19 +271,12 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of campaign data."""
     # Extract company data from prior if available
     prior = kwargs.get("prior", {})
-    company_df = prior.get("Company")
-    product_df = prior.get("Products")
+    product_df = require_df(prior.get("Products"), "Products")
 
     product_ids = product_df.select("product_id").to_series().to_list()
 
     # Generate campaign IDs
     ids = make_ids(n, "CAM")
-
-    # Create company IDs to associate with campaigns
-    company_ids = []
-    if company_df is not None:
-        # Use existing company IDs if available
-        company_ids = company_df["company_id"].to_list()
 
     # Generate start dates
     start_dates = [random_date() for _ in ids]
@@ -336,10 +336,6 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             "source_id": [f"CMP{i:04d}" for i in range(1, n + 1)],
         }
     )
-
-    # Add company_id if company data is available
-    if company_ids:
-        df = df.with_columns(pl.Series("company_id", make_ids_with_duplicates(company_ids, n)))
 
     # Add parent_campaign_id (some campaigns are child campaigns of others)
     # About 30% of campaigns have a parent campaign

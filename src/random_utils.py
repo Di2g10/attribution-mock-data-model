@@ -271,3 +271,9 @@ def generate_source_id_mappings(
         usage_tracker[key] += 1
 
     return pl.DataFrame(data)
+
+
+def require_df(value: Any, name: str) -> pl.DataFrame:
+    if not isinstance(value, pl.DataFrame):
+        raise TypeError(f"Expected DataFrame for {name}, got {type(value).__name__}")
+    return value
