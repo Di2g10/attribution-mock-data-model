@@ -50,15 +50,15 @@ def _registry_channels(registry: Any | None) -> list[Dict[str, Any]]:
 # Main generator
 # --------------------------------------------------------------------------- #
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
-    """Return *n* rows for the **Channel** dimension.
+    """Return *n* lf for the **Channel** dimension.
 
     If a registry is supplied (``registry=SchemaRegistry``), we reuse any
-    pre-defined rows and then pad with synthetic ones until we reach *n*.
+    pre-defined lf and then pad with synthetic ones until we reach *n*.
     """
     registry = kwargs.get("registry")
     seed_rows = _registry_channels(registry)
 
-    # ── Pad out with synthetic rows if we still need more ──────────────────
+    # ── Pad out with synthetic lf if we still need more ──────────────────
     needed = max(0, n - len(seed_rows))
 
     for _ in range(needed):
@@ -72,7 +72,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             }
         )
 
-    # ── Slice to exactly *n* rows (registry may have had too many) ─────────
+    # ── Slice to exactly *n* lf (registry may have had too many) ─────────
     rows = seed_rows[:n]
 
     # ── Build DataFrame ────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             "channel_id": make_ids(n, "CHAN"),
             "channel_name": [r["Channel Name"] for r in rows],
             "group": [r["Group"] for r in rows],
-            # "identifiable_method": [r["Identifiable method"] for r in rows],
+            # "identifiable_method": [r["Identifiable method"] for r in lf],
             "type": [r["Type"] for r in rows],
         }
     )

@@ -53,7 +53,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     - Requires prior outputs:
       * 'Attribution Linking Table' — one output row per link
-      * 'Attribution Model' — used to attach the model id to all rows
+      * 'Attribution Model' — used to attach the model id to all lf
     - Aligns to the workbook's Attributes sheet when available.
 
     :param n: Unused for this generator; row count is driven by number of links.
@@ -69,7 +69,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     )
     model_df = _require_df(prior.get("Attribution Model"), "Attribution Model", missing_ok=True)
 
-    # Determine how many rows to emit
+    # Determine how many lf to emit
     links_available = (
         isinstance(links, pl.DataFrame) and ("link_id" in links.columns) and links.height > 0
     )

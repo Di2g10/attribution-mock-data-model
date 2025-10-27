@@ -25,6 +25,7 @@ def prior_with_null_company_and_no_roles() -> dict[str, pl.DataFrame]:
         {
             "person_id": ["PIP0001", "PIP0002"],
             "first_name": ["Pat", "Pia"],
+            "company_id": [None, None],
         }
     )
 
@@ -50,13 +51,13 @@ def test_ip_company_match_populates_company() -> None:
     # Generate a moderate number to increase chance of IP Company Match identification
     df = generate_interactions(50, prior=prior, keep_channel=True)
 
-    # Focus on rows that were IP-matched and had person cleared
+    # Focus on df that were IP-matched and had person cleared
     ip_rows = df.filter(
         (pl.col("identification_method_type") == "IP Company Match")
         & pl.col("interacted_person_id").is_null()
     )
 
-    # If none were produced due to randomness, relax by asserting no IP rows have null company
+    # If none were produced due to randomness, relax by asserting no IP lf have null company
     if ip_rows.is_empty():
         # For any IP Company Match row, company must be non-null
         ip_any = df.filter(pl.col("identification_method_type") == "IP Company Match")
@@ -66,7 +67,7 @@ def test_ip_company_match_populates_company() -> None:
         )
         return
 
-    # For produced IP-only rows, ensure company is populated
+    # For produced IP-only lf, ensure company is populated
     assert (
         ip_rows.select(pl.col("interacted_company_id").is_null().any()).item() is False
     ), "IP-only interactions should have a company populated"

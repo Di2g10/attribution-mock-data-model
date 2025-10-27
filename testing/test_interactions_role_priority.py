@@ -13,7 +13,7 @@ import polars as pl
 from src.generators.interactions import generate as generate_interactions
 
 
-def prior_with_roles() -> Dict[str, pl.DataFrame]:
+def create_prior() -> Dict[str, pl.DataFrame]:
     """Build a minimal prior including a role table to drive company selection.
 
     We deliberately create a mismatch between the activity's targeted_company_id and
@@ -30,6 +30,7 @@ def prior_with_roles() -> Dict[str, pl.DataFrame]:
         {
             "person_id": ["PER0100001"],
             "first_name": ["Alex"],
+            "company_id": ["CO0000101"],
         }
     )
 
@@ -44,44 +45,39 @@ def prior_with_roles() -> Dict[str, pl.DataFrame]:
         }
     )
 
-    # Person Company Role says the person's company is CO0000101
-    role_df = pl.DataFrame(
-        {
-            "Person ID": ["PER0100001"],
-            "Company ID": ["CO0000101"],
-        }
-    )
-
     return {
         "Company": company_df,
         "Person": person_df,
         "Marketing Activity": activity_df,
-        "Person Company Role": role_df,
     }
 
 
 def test_role_priority_over_targeted_company() -> None:
     """Role-based company should override targeted_company_id when they differ."""
-    prior = prior_with_roles()
-    # Generate several rows to sample both activities
+    prior = create_prior()
+    # Generate several df to sample both activities
     df = generate_interactions(20, prior=prior, keep_channel=True)
 
-    # All rows for this person should point to the role company CO0000101
+    # All df for this person should point to the role company CO0000101
     rows = df.filter(pl.col("interacted_person_id") == "PER0100001")
     assert not rows.is_empty(), "Expected generated interactions for the test person"
     assert rows.select(pl.col("interacted_company_id").unique()).to_series().to_list() == [
         "CO0000101"
-    ], "interacted_company_id should be derived from Person Company Role when available"
+    ], "interacted_company_id should be derived from Person Company when available"
 
 
 def test_role_fills_when_targeted_company_null() -> None:
     """When targeted_company_id is null, role-derived company must be used."""
-    prior = prior_with_roles()
+    prior = create_prior()
     df = generate_interactions(10, prior=prior, keep_channel=False)
 
     rows = df.filter(pl.col("marketing_activity_id") == "ACT0100002")
     assert not rows.is_empty(), "Expected interactions from the activity with null company"
-    # All such rows should use the role company
+    # All such lf should use the role company
     assert rows.select(pl.col("interacted_company_id").unique()).to_series().to_list() == [
         "CO0000101"
     ], "Null targeted_company_id should be filled from Person Company Role"
+
+
+if __name__ == "__main__":
+    test_role_priority_over_targeted_company()

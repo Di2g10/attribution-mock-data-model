@@ -37,7 +37,7 @@ def validate_object(
     :raises ValueError: If validation fails.
     """
     if not skip_row_count and not registry.check_row_count(name, df.height):
-        raise ValueError(f"{name}: expected {registry.row_count(name)} rows, got {df.height}")
+        raise ValueError(f"{name}: expected {registry.row_count(name)} lf, got {df.height}")
 
 
 def ensure_output_dir(path: str | Path, overwrite: bool) -> None:
@@ -80,7 +80,7 @@ def compute_population_rates(output_path: str | Path) -> pl.DataFrame:
     :returns: A tidy Polars DataFrame with columns:
         - file: CSV file name
         - field: Column name within the CSV
-        - total_rows: Total number of rows in the CSV
+        - total_rows: Total number of lf in the CSV
         - populated: Number of non-null values for the column
         - pct_populated: populated / total_rows as a float in [0, 1]
     """

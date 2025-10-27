@@ -32,7 +32,7 @@ def build(
     :param output_path: Directory where CSVs will be written.
     :param overwrite: Whether to overwrite the output directory if it exists.
     :param max_rows_per_object: Optional cap; if provided, each generated object's
-        DataFrame will be truncated to at most this many rows. This does not
+        DataFrame will be truncated to at most this many lf. This does not
         modify the configured row counts in validation; tests using this option
         should avoid strict row-count assertions.
     :returns: Mapping of object name to generated Polars DataFrame.
@@ -54,9 +54,7 @@ def build(
         module_name = obj_name.lower().replace(" ", "_")
         try:
             row_count = registry.row_count(obj_name)
-            print(
-                f"[orchestrator] [{idx}/{len(order)}] Generating '{obj_name}' (rows={row_count}) …"
-            )
+            print(f"[orchestrator] [{idx}/{len(order)}] Generating '{obj_name}' (lf={row_count}) …")
             t0 = perf_counter()
             gen_module: ModuleType = import_module(f"src.generators.{module_name}")
             # Respect optional cap; avoid calling min() with None
@@ -85,7 +83,7 @@ def build(
 
             objs[obj_name] = df
             print(
-                f"[orchestrator] Completed '{obj_name}': rows={df.height}, gen={gen_dur:.2f}s, validate={val_dur:.2f}s"
+                f"[orchestrator] Completed '{obj_name}': lf={df.height}, gen={gen_dur:.2f}s, validate={val_dur:.2f}s"
             )
         except ModuleNotFoundError as e:
             raise ModuleNotFoundError(
@@ -107,7 +105,7 @@ def build(
             out_file = Path(output_path) / f"{name}.csv"
             df.write_csv(out_file)
             print(
-                f"[orchestrator] Wrote {name}.csv (rows={df.height}) in {perf_counter() - t_write:.2f}s -> {out_file}"
+                f"[orchestrator] Wrote {name}.csv (lf={df.height}) in {perf_counter() - t_write:.2f}s -> {out_file}"
             )
         print(f"[orchestrator] Finished writing CSVs in {perf_counter() - write_start:.2f}s")
     else:

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 import polars as pl
 
-from ..random_utils import fake, make_ids, random_date, weighted_sample
+from ..random_utils import fake, make_ids, random_date, weighted_sample, require_df
 
 __all__ = ["generate"]
 
@@ -190,7 +190,7 @@ CESSATION_REASON_WEIGHTS = [
 def _extract_prior_data(
     prior: Dict[str, Any],
 ) -> Tuple[
-    pl.DataFrame | None,
+    pl.DataFrame,
     pl.DataFrame | None,
     pl.DataFrame | None,
     pl.DataFrame | None,
@@ -201,7 +201,7 @@ def _extract_prior_data(
     Returns a 5-tuple: Company, Person, Interactions, Person Company Role, Products.
     Missing tables are returned as None to keep the generator robust to ordering.
     """
-    company_df = prior.get("Company")
+    company_df = require_df(prior.get("Company"), "Company")
     person_df = prior.get("Person")
     interaction_df = prior.get("Interactions")
     person_company_role_df = prior.get("Person Company Role")
@@ -262,11 +262,11 @@ def _create_company_person_map(
     return company_person_map, person_company_map
 
 
-def _assign_companies_to_orders(company_ids: List[str], ids: List[str]) -> List[str]:
-    order_companies = []
-    for _ in ids:
-        order_companies.append(fake.random.choice(company_ids) if company_ids else fake.company())
-    return order_companies
+def _assign_companies_to_orders(company_ids: list[str], ids: list[str]) -> list[str]:
+    if company_ids:
+        return [fake.random.choice(company_ids) for _ in ids]
+    # No Company prior: leave company unset to keep tests schema-safe
+    raise ValueError("No Company IDs provided")
 
 
 def _build_interaction_based_map(interaction_df: Optional[pl.DataFrame]) -> Dict[str, List[str]]:
@@ -293,8 +293,8 @@ def _select_contact_for_company(
 ) -> Optional[str]:
     """Select a contact candidate for a company, needs improvement."""
     # Fake company label → generate a fake contact name
-    if isinstance(company, str) and not company.startswith("CO"):
-        raise ValueError(f"Invalid company label: {company}")
+    if not isinstance(company, str) or not company.startswith("CO"):
+        raise ValueError(f"Invalid company ID: {company}")
 
     # Real company: prefer someone who interacted
     if interaction_based_company_person_map.get(company):
@@ -308,13 +308,18 @@ def _select_contact_for_company(
 
 
 def _create_company_person_relationships(
-    company_df: Optional[pl.DataFrame],
+    company_df: pl.DataFrame,
     person_df: Optional[pl.DataFrame],
     person_company_role_df: Optional[pl.DataFrame],
     ids: List[str],
     interaction_df: Optional[pl.DataFrame] = None,
 ) -> Tuple[
-    List[str], List[str], Dict[str, List[str]], Dict[str, List[str]], List[str], List[str | None]
+    List[str],
+    List[str],
+    Dict[str, List[str]],
+    Dict[str, List[str]],
+    List[str],
+    List[str | None],
 ]:
     company_ids: List[str] = []
     person_ids: List[str] = []

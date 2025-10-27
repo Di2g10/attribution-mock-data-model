@@ -6,7 +6,7 @@ import polars as pl
 
 __all__ = ["generate"]
 
-from src.random_utils import make_ids, require_df
+from src.random_utils import require_df
 
 _schema_base = {
     "interaction_id": pl.String,
@@ -31,7 +31,9 @@ _schema_enriched = {
 }
 
 
-def _create_ancestry(df: pl.DataFrame, *, row_id: str, parent_id: str) -> pl.DataFrame:
+def _create_ancestry(
+    df: pl.DataFrame, *, row_id: str, parent_id: str, usage_tag: str = ""
+) -> pl.DataFrame:
     """Return every (node, ancestor, distance) triple in the hierarchy."""
     closure = df.select(
         pl.col(row_id).alias("origin_id"),
@@ -44,8 +46,12 @@ def _create_ancestry(df: pl.DataFrame, *, row_id: str, parent_id: str) -> pl.Dat
         pl.col(parent_id).alias("ancestor_id"),
         pl.lit(1).alias("distance"),
     )
-
+    count = 0
+    limit = 10
     while level.height:
+        count += 1
+        print(f"{usage_tag} _create_ancestry level.height:{level.height} count:{count}")
+
         closure = pl.concat([closure, level])
 
         level = (
@@ -57,11 +63,13 @@ def _create_ancestry(df: pl.DataFrame, *, row_id: str, parent_id: str) -> pl.Dat
                 (pl.col("distance") + 1).alias("distance"),
             )
         )
+        if count > limit:
+            break
 
     return closure.unique()  # <- what your test wants
 
 
-def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
+def _build_links(closure: pl.LazyFrame) -> pl.LazyFrame:
     """From closure build all shortest links between related children.
 
     From a closure `[origin_id, ancestor_id, distance]`
@@ -71,8 +79,8 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
     This implementation uses Polars lazy with streaming joins to reduce peak
     memory during construction for large hierarchies.
     """
-    a = closure.lazy().rename({"origin_id": "node_a", "distance": "dist_a"})
-    b = closure.lazy().rename({"origin_id": "node_b", "distance": "dist_b"})
+    a = closure.rename({"origin_id": "node_a", "distance": "dist_a"})
+    b = closure.rename({"origin_id": "node_b", "distance": "dist_b"})
 
     links_raw = a.join(b, on="ancestor_id", how="inner").with_columns(
         (pl.col("dist_a") + pl.col("dist_b")).alias("degrees"),
@@ -85,8 +93,8 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
 
     # keep one shortest row per unordered pair
     links_min = (
-        links_raw.sort("degrees")
-        .unique(subset=["pair_key"], keep="first")
+        links_raw.group_by("pair_key")
+        .agg(pl.all().sort_by("degrees").first())  # picks the min-degrees row per pair
         .select(["node_a", "node_b", "ancestor_id", "degrees"])
     )
 
@@ -95,21 +103,20 @@ def _build_links(closure: pl.DataFrame) -> pl.DataFrame:
     # enforce identical column order before stacking
     wanted_cols = ["from_id", "to_id", "ancestor_id", "degrees"]
 
-    links_min_df = links_min.collect()
-    df1 = links_min_df.rename({"node_a": "from_id", "node_b": "to_id"}).select(wanted_cols)
-    df2 = links_min_df.rename({"node_a": "to_id", "node_b": "from_id"}).select(wanted_cols)
+    df1 = links_min.rename({"node_a": "from_id", "node_b": "to_id"}).select(wanted_cols)
+    df2 = links_min.rename({"node_a": "to_id", "node_b": "from_id"}).select(wanted_cols)
     # Remove any duplicated ordered pairs (e.g., self-pairs A==B would appear twice)
-    return pl.concat([df1, df2], how="vertical").unique().sort(["from_id", "to_id"])
+    return pl.concat([df1, df2], how="vertical").unique()
 
 
-def _find_shortest_links(closure: pl.DataFrame) -> pl.DataFrame:
+def _find_shortest_links(closure: pl.LazyFrame) -> pl.LazyFrame:
     """Backward-compatible alias; compute symmetric shortest links between nodes.
 
     Historically exported as `_find_shortest_links`; implementation is identical to `_build_links`.
     :param closure: DataFrame with columns [origin_id, ancestor_id, distance]
     :returns: Symmetric links table [from_id, to_id, ancestor_id, degrees]
     """
-    return _build_links(closure)
+    return _build_links(closure).lazy()
 
 
 def _compute_product_yca(  # noqa PLR0913 Too many arguments in function definition (6 > 5)
@@ -120,13 +127,13 @@ def _compute_product_yca(  # noqa PLR0913 Too many arguments in function definit
     outcome_col: str,
     campaign_col: str,
     asset_col: str,
-) -> pl.Series:
+) -> pl.LazyFrame:
     """Backward-compatible alias for `_best_product_yca_level`.
 
-    Returns the product_yca_tier Series aligned to the given rows.
+    Returns the product_yca_tier Series aligned to the given lf.
     """
     return _best_product_yca_level(
-        rows,
+        rows.lazy(),
         product_links,
         products_df,
         outcome_col=outcome_col,
@@ -146,14 +153,14 @@ def _define_schema(stage: str) -> pl.DataFrame:
 
 
 def _best_product_yca_level(  # noqa: PLR0913
-    rows: pl.DataFrame,
+    lf: pl.LazyFrame,
     product_links: pl.DataFrame,
     products_df: pl.DataFrame,
     *,
     outcome_col: str,
     campaign_col: str,
     asset_col: str,
-) -> pl.Series:
+) -> pl.LazyFrame:
     """Compute best (youngest) common ancestor level for outcome vs campaign/asset products.
 
     This function reuses the generic links table built from a product closure
@@ -162,21 +169,21 @@ def _best_product_yca_level(  # noqa: PLR0913
     product or the asset product. The returned value is the ancestor's
     textual generation level as stored in the Products table (e.g. "Tier 1").
 
-    :param rows: Frame containing outcome, campaign and asset product ID columns.
+    :param lf: Frame containing outcome, campaign and asset product ID columns.
     :param product_links: Symmetric links table from _build_links over product closure.
     :param products_df: Products dimension table (must include product_id and level).
-    :param outcome_col: Column name in rows containing the outcome product_id.
+    :param outcome_col: Column name in lf containing the outcome product_id.
     :param campaign_col: Column name containing campaign product_id.
     :param asset_col: Column name containing asset product_id.
-    :returns: A Series of string levels (or null) aligned with rows height.
+    :returns: A Series of string levels (or null) aligned with lf height.
     :raises ValueError: If required columns are missing.
     """
     required = {outcome_col, campaign_col, asset_col}
-    missing = [c for c in required if c not in rows.columns]
+    missing = [c for c in required if c not in lf.collect_schema().names()]
     if missing:  # pragma: no cover
         raise ValueError(f"Missing required columns for YCA: {', '.join(missing)}")
 
-    rows_s = rows.with_columns(
+    rows_s = lf.with_columns(
         [
             pl.col(outcome_col).cast(pl.String),
             pl.col(campaign_col).cast(pl.String),
@@ -184,12 +191,14 @@ def _best_product_yca_level(  # noqa: PLR0913
         ]
     )
 
-    prod_level = products_df.select(["product_id", "level"]).rename(
-        {"product_id": "_anc_id", "level": "_anc_level"}
+    prod_level = (
+        products_df.select(["product_id", "level"])
+        .rename({"product_id": "_anc_id", "level": "_anc_level"})
+        .lazy()
     )
 
     links_cols = ["from_id", "to_id", "ancestor_id", "degrees"]
-    plc = product_links.select(links_cols)
+    plc = product_links.select(links_cols).lazy()
 
     oc = (
         rows_s.join(
@@ -228,11 +237,11 @@ def _best_product_yca_level(  # noqa: PLR0913
     )
 
     best = best.join(prod_level, left_on="_best_anc", right_on="_anc_id", how="left")
-    return best.get_column("_anc_level").rename("product_yca_tier")
+    return best.select(pl.col("_anc_level").alias("product_yca_tier"))
 
 
 def _best_company_yca_type(
-    rows: pl.DataFrame,
+    lf: pl.LazyFrame,
     company_links: pl.DataFrame,
     companies_df: pl.DataFrame,
     *,
@@ -241,20 +250,20 @@ def _best_company_yca_type(
 ) -> pl.Series:
     """Compute company_yca_type: business type of youngest common parent between two companies.
 
-    :param rows: Frame containing the outcome and activity company ID columns.
+    :param lf: Frame containing the outcome and activity company ID columns.
     :param company_links: Symmetric links table over the company closure.
     :param companies_df: Company dimension table with business type.
-    :param outcome_company_col: Column in `rows` with the order's company_id.
-    :param activity_company_col: Column in `rows` with the activity's company_id.
-    :returns: Series of business type strings aligned to rows.height.
+    :param outcome_company_col: Column in `lf` with the order's company_id.
+    :param activity_company_col: Column in `lf` with the activity's company_id.
+    :returns: Series of business type strings aligned to lf.height.
     :raises ValueError: If required columns are missing.
     """
     required = {outcome_company_col, activity_company_col}
-    missing = [c for c in required if c not in rows.columns]
+    missing = [c for c in required if c not in lf.collect_schema().names()]
     if missing:  # pragma: no cover
         raise ValueError(f"Missing required columns for Company YCA: {', '.join(missing)}")
 
-    rows_s = rows.with_columns(
+    rows_s = lf.with_columns(
         [
             pl.col(outcome_company_col).cast(pl.String),
             pl.col(activity_company_col).cast(pl.String),
@@ -262,11 +271,13 @@ def _best_company_yca_type(
     )
 
     # Minimal map ancestor -> business type
-    comp_bt = companies_df.select(["company_id", "Company Business Type"]).rename(
-        {"company_id": "_anc_id", "Company Business Type": "_anc_bt"}
+    comp_bt = (
+        companies_df.select(["company_id", "Company Business Type"])
+        .rename({"company_id": "_anc_id", "Company Business Type": "_anc_bt"})
+        .lazy()
     )
 
-    cl = company_links.select(["from_id", "to_id", "ancestor_id", "degrees"])
+    cl = company_links.select(["from_id", "to_id", "ancestor_id", "degrees"]).lazy()
 
     return (
         rows_s.join(
@@ -277,8 +288,7 @@ def _best_company_yca_type(
         )
         .rename({"ancestor_id": "anc_co"})
         .join(comp_bt, left_on="anc_co", right_on="_anc_id", how="left")
-        .get_column("_anc_bt")
-        .rename("company_yca_type")
+        .select(pl.col("_anc_bt").alias("company_yca_type"))
     )
 
 
@@ -318,148 +328,140 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     campaigns_df = require_df(prior.get("Campaigns"), "Campaigns")
     assets_df = require_df(prior.get("Marketing Assets"), "Marketing Assets")
 
-    can_enrich = all(
-        isinstance(df, pl.DataFrame)
-        for df in (
-            products_df,
-            marketing_activity_df,
-            campaigns_df,
-            assets_df,
-            interaction_df,
-            order_df,
-            company_df,
+    # Build closures/links once
+    product_closure = _create_ancestry(
+        products_df, row_id="product_id", parent_id="product_parent_id", usage_tag="product_closure"
+    )
+    product_links = _build_links(product_closure)
+
+    company_closure = _create_ancestry(
+        company_df, row_id="company_id", parent_id="Parent_Company_ID", usage_tag="company_closure"
+    )
+    company_links = _build_links(company_closure)
+
+    # Bring in product IDs and company IDs using a lazy, streaming pipeline
+    lf = filtered_links.lazy()
+
+    # 1) outcome product and company via Orders
+    lf_with_orders = lf.join(
+        order_df.select(["order_id", "product_id", "company_id"])
+        .rename(
+            {
+                "order_id": "_outcome_id",
+                "product_id": "outcome_product_id",
+                "company_id": "outcome_company_id",
+            }
         )
+        .lazy(),
+        left_on="outcome_id",
+        right_on="_outcome_id",
+        how="left",
     )
 
-    if can_enrich and filtered_links.height:
-        # Build closures/links once
-        product_closure = _create_ancestry(
-            products_df, row_id="product_id", parent_id="product_parent_id"
-        )
-        product_links = _build_links(product_closure)
-
-        company_closure = _create_ancestry(
-            company_df, row_id="company_id", parent_id="Parent_Company_ID"
-        )
-        company_links = _build_links(company_closure)
-
-        # Bring in product IDs and company IDs using a lazy, streaming pipeline
-        lf = filtered_links.lazy()
-
-        # 1) outcome product and company via Orders
-        lf_with_orders = lf.join(
-            order_df.select(["order_id", "product_id", "company_id"])
-            .rename(
-                {
-                    "order_id": "_outcome_id",
-                    "product_id": "outcome_product_id",
-                    "company_id": "outcome_company_id",
-                }
-            )
-            .lazy(),
-            left_on="outcome_id",
-            right_on="_outcome_id",
-            how="left",
-        )
-
-        # 2) add marketing_activity_id and interacted_company_id via Interactions
-        lf_with_interaction = lf_with_orders.join(
-            (
-                interaction_df.select(
-                    [
-                        "interaction_id",
-                        "marketing_activity_id",
-                        "interacted_company_id",
-                        "interaction_type",
-                        "interacted_person_id",
-                    ]
-                ).lazy()
-            ),
-            on="interaction_id",
-            how="left",
-            suffix="_i",
-        )
-        # 3) campaign/asset and targeted_company_id via Marketing Activity
-        lf_with_ma = lf_with_interaction.join(
-            marketing_activity_df.select(
+    # 2) add marketing_activity_id and interacted_company_id via Interactions
+    lf_with_interaction = lf_with_orders.join(
+        (
+            interaction_df.select(
                 [
+                    "interaction_id",
                     "marketing_activity_id",
-                    "campaign_id",
-                    "marketing_asset_id",
-                    "targeted_company_id",
-                    "channel_id",
+                    "interacted_company_id",
+                    "interaction_type",
+                    "interacted_person_id",
                 ]
-            ).lazy(),
-            left_on="marketing_activity_id",
-            right_on="marketing_activity_id",
-            how="left",
-        )
-        # 4) campaign product
-        lf_with_campaign = lf_with_ma.join(
-            campaigns_df.select(["campaign_id", "product_id"])
-            .rename({"product_id": "campaign_product_id"})
-            .lazy(),
-            on="campaign_id",
-            how="left",
-        )
-        # 5) asset product
-        lf_with_asset = lf_with_campaign.join(
-            assets_df.select(["marketing_asset_id", "product_id"])
-            .rename({"product_id": "asset_product_id"})
-            .lazy(),
-            on="marketing_asset_id",
-            how="left",
-        )
-        # 6) Get channel Name from ID
-        lf_with_channel = lf_with_asset.join(
-            channel_df.select(["channel_id", "channel_name"]).lazy(),
-            on="channel_id",
-            how="left",
-        )
-        # 7) derive activity_company_id with preference for targeted_company_id
-        df_enriched = lf_with_channel.with_columns(
-            pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
-                "activity_company_id"
-            ),
-            pl.col("interacted_person_id").alias("person_id"),
-        ).collect()
-
-        # Compute enrichments
-        product_yca_tier = _best_product_yca_level(
-            df_enriched,
-            product_links,
-            products_df,
-            outcome_col="outcome_product_id",
-            campaign_col="campaign_product_id",
-            asset_col="asset_product_id",
-        )
-        df_enriched = df_enriched.with_columns(product_yca_tier)
-
-        # only compute company_yca_type if it wasn't already produced upstream
-        if "company_yca_type" not in df_enriched.columns:
-            company_yca_type = _best_company_yca_type(
-                df_enriched,
-                company_links,
-                company_df,
-                outcome_company_col="outcome_company_id",
-                activity_company_col="activity_company_id",
-            )
-            df_enriched = df_enriched.with_columns(company_yca_type)
-
-    else:
-        # No enrichment possible: add null columns to satisfy schema
-        df_enriched = filtered_links.with_columns(
+            ).lazy()
+        ),
+        on="interaction_id",
+        how="left",
+        suffix="_i",
+    )
+    # 3) campaign/asset and targeted_company_id via Marketing Activity
+    lf_with_ma = lf_with_interaction.join(
+        marketing_activity_df.select(
             [
-                pl.lit(None).cast(pl.String).alias("product_yca_tier"),
-                pl.lit(None).cast(pl.String).alias("company_yca_type"),
+                "marketing_activity_id",
+                "campaign_id",
+                "marketing_asset_id",
+                "targeted_company_id",
+                "channel_id",
             ]
+        ).lazy(),
+        left_on="marketing_activity_id",
+        right_on="marketing_activity_id",
+        how="left",
+    )
+    # 4) campaign product
+    lf_with_campaign = lf_with_ma.join(
+        campaigns_df.select(["campaign_id", "product_id"])
+        .rename({"product_id": "campaign_product_id"})
+        .lazy(),
+        on="campaign_id",
+        how="left",
+    )
+    # 5) asset product
+    lf_with_asset = lf_with_campaign.join(
+        assets_df.select(["marketing_asset_id", "product_id"])
+        .rename({"product_id": "asset_product_id"})
+        .lazy(),
+        on="marketing_asset_id",
+        how="left",
+    )
+    # 6) Get channel Name from ID
+    lf_with_channel = lf_with_asset.join(
+        channel_df.select(["channel_id", "channel_name"]).lazy(),
+        on="channel_id",
+        how="left",
+    )
+    # 7) derive activity_company_id with preference for targeted_company_id
+    df_enriched = lf_with_channel.with_columns(
+        pl.coalesce([pl.col("targeted_company_id"), pl.col("interacted_company_id")]).alias(
+            "activity_company_id"
+        ),
+        pl.col("interacted_person_id").alias("person_id"),
+    )
+
+    # Compute enrichments
+    product_yca_tier = _best_product_yca_level(
+        df_enriched,
+        product_links,
+        products_df,
+        outcome_col="outcome_product_id",
+        campaign_col="campaign_product_id",
+        asset_col="asset_product_id",
+    )
+    df_enriched = pl.concat([df_enriched, product_yca_tier], how="horizontal")
+
+    # only compute company_yca_type if it wasn't already produced upstream
+    if "company_yca_type" not in df_enriched.collect_schema().names():
+        company_yca_type = _best_company_yca_type(
+            df_enriched,
+            company_links,
+            company_df,
+            outcome_company_col="outcome_company_id",
+            activity_company_col="activity_company_id",
         )
+        df_enriched = pl.concat([df_enriched, company_yca_type], how="horizontal")
 
     # Generate Link IDs
-    link_ids = pl.Series("link_id", make_ids(df_enriched.height, "LINK"), dtype=pl.String)
-    result = df_enriched.with_columns(link_ids)
+    pad = 7
+    prefix = "LINK"
 
-    return result.match_to_schema(_schema_enriched, missing_columns="raise", extra_columns="ignore")
+    df_enriched = (
+        df_enriched.with_row_index("idx", offset=0)  # 0..n-1 lazily
+        .with_columns(
+            link_id=pl.concat_str(
+                [
+                    pl.lit(prefix),
+                    (pl.col("idx") + 1).cast(pl.Utf8).str.zfill(pad),  # 1..n  # zero-pad
+                ]
+            )
+        )
+        .drop("idx")
+    )
+
+    return df_enriched.match_to_schema(
+        _schema_enriched, missing_columns="raise", extra_columns="ignore"
+    ).collect(engine="streaming")
 
 
 def _generate_links_though_person_company(
@@ -475,7 +477,10 @@ def _generate_links_though_person_company(
     peak memory on large datasets.
     """
     company_ancestry = _create_ancestry(
-        company_df, row_id="company_id", parent_id="Parent_Company_ID"
+        company_df,
+        row_id="company_id",
+        parent_id="Parent_Company_ID",
+        usage_tag="company_ancestory",
     )
     company_links = _build_links(company_ancestry)
 
@@ -610,7 +615,12 @@ def _generate_links_company_only(
         return _define_schema("base")
 
     # Build company links once
-    comp_closure = _create_ancestry(company_df, row_id="company_id", parent_id="Parent_Company_ID")
+    comp_closure = _create_ancestry(
+        company_df,
+        row_id="company_id",
+        parent_id="Parent_Company_ID",
+        usage_tag="Company only links_company_closure",
+    )
     comp_links = _build_links(comp_closure)
 
     # Lazily join interaction company to orders via ancestry links
@@ -639,7 +649,7 @@ def _generate_links_company_only(
 
 def _date_difference_filter(
     link: pl.lazyframe.LazyFrame, interaction_df: pl.DataFrame, outcome_df: pl.DataFrame
-) -> pl.DataFrame:
+) -> pl.LazyFrame:
     """Calculate the difference between activity and outcome & Filter interaction after outcome.
 
     Uses lazy streaming joins to reduce peak memory.
@@ -680,9 +690,7 @@ def _date_difference_filter(
         )
         .drop("_lag")
     )
-    return lf.match_to_schema(
-        _schema_time_lag, missing_columns="raise", extra_columns="ignore"
-    ).collect()
+    return lf.match_to_schema(_schema_time_lag, missing_columns="raise", extra_columns="ignore")
 
 
 def merge_links(link_dfs: list[pl.DataFrame]) -> pl.lazyframe.LazyFrame:
@@ -698,12 +706,7 @@ def merge_links(link_dfs: list[pl.DataFrame]) -> pl.lazyframe.LazyFrame:
         return _define_schema("base").lazy()
 
     return (
-        pl.concat(
-            [_with_priority(df, i) for i, df in enumerate(link_dfs)],
-            how="vertical",
-            rechunk=True,
+        pl.concat(link_dfs, how="vertical", rechunk=True).unique(
+            subset=["interaction_id", "outcome_id"], keep="first"
         )
-        .sort(["_priority"])
-        .unique(subset=["interaction_id", "outcome_id"], keep="first")
-        .drop("_priority")
     ).lazy()

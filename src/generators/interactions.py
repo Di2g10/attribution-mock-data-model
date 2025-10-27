@@ -145,7 +145,7 @@ def get_channel_data_from_registry(registry: Any) -> Tuple[Dict[str, List[str]],
         channels_df = registry.cfg.channels
         if not channels_df.is_empty():
             # Extract channel names
-            channel_names = channels_df["Name"].to_list()
+            channel_names = channels_df["Channel Name"].to_list()
             # Update channel weights with equal weights if not already defined
             for channel in channel_names:
                 if channel not in channel_weights:
@@ -398,7 +398,7 @@ def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a high-performance DataFrame of interaction data using vectorised logic.
 
-    :param n: Number of rows to generate
+    :param n: Number of lf to generate
     :param kwargs: Supports `prior`, `registry`, `keep_channel`
     :raises ValueError: If required activity or relationship data is missing
     :returns: Polars DataFrame with interaction data
@@ -406,8 +406,14 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     prior = kwargs.get("prior", {})
     registry = kwargs.get("registry")
 
-    # --- 1. Gather activities from Push and Pull sources ---
+    # --- 1. Gather activities from Marketing Activity sources ---
     marketing_activity_df = require_df(prior.get("Marketing Activity"), "Marketing Activity")
+    person_df = require_df(prior.get("Person"), "Person")
+    if not {"person_id", "company_id"}.issubset(person_df.columns):
+        raise ValueError(
+            "Missing the required person/company columns ['person_id', 'company_id'] in Person data."
+        )
+
     if marketing_activity_df is None or not {
         "marketing_activity_id",
         "targeted_person_id",
@@ -415,7 +421,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     }.issubset(marketing_activity_df.columns):
         raise ValueError("No activity data with valid person/company references found.")
 
-    person_ids = extract_id_column(prior.get("Person"), "person_id")
+    person_ids = extract_id_column(person_df, "person_id")
     fallback_series = pl.Series(
         "random_person_id",
         weighted_sample(person_ids, n=marketing_activity_df.height),
@@ -431,31 +437,30 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ]
     )
 
-    # --- 2. Prioritise Person Company Role for company derivation if available ---
-    role_df = prior.get("Person Company Role")
-    if role_df is not None and {"Person ID", "Company ID"}.issubset(role_df.columns):
-        # Build a deterministic person -> company map and prefer it over targeted_company_id
-        person_company_map = (
-            role_df.select(
-                [
-                    pl.col("Person ID").alias("interacted_person_id"),
-                    pl.col("Company ID").alias("_role_company_id"),
-                ]
-            )
-            .unique()
-            .group_by("interacted_person_id")
-            .agg(pl.first("_role_company_id").alias("_role_company_id"))
-        )
+    # --- 2. Prioritise Person Company for company derivation if available ---
 
-        activities_df = (
-            activities_df.join(person_company_map, on="interacted_person_id", how="left")
-            .with_columns(
-                pl.coalesce([pl.col("_role_company_id"), pl.col("interacted_company_id")]).alias(
-                    "interacted_company_id"
-                )
-            )
-            .drop("_role_company_id")
+    # Build a deterministic person -> company map and prefer it over targeted_company_id
+    person_company_map = (
+        person_df.select(
+            [
+                pl.col("person_id").alias("interacted_person_id"),
+                pl.col("company_id").alias("_person_company_id"),
+            ]
         )
+        .unique()
+        .group_by("interacted_person_id")
+        .agg(pl.first("_person_company_id").alias("_person_company_id"))
+    )
+
+    activities_df = (
+        activities_df.join(person_company_map, on="interacted_person_id", how="left")
+        .with_columns(
+            pl.coalesce([pl.col("_person_company_id"), pl.col("interacted_company_id")]).alias(
+                "interacted_company_id"
+            )
+        )
+        .drop("_person_company_id")
+    )
 
     # --- 3. Sample activities for interaction base ---
     interaction_ids = make_ids(n, "INT")
@@ -556,7 +561,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         .alias("interacted_person_id")
     ).drop("_is_referenced")
 
-    # Ensure interacted_company_id is populated for IP Company Match rows
+    # Ensure interacted_company_id is populated for IP Company Match lf
     # If role/targeted company did not supply a company, fill from the Company table.
     try:
         company_ids_list = extract_id_column(prior.get("Company"), "company_id")
@@ -564,7 +569,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         company_ids_list = []
 
     if company_ids_list:
-        # Choose a single fallback company to keep None-person company mapping consistent across rows
+        # Choose a single fallback company to keep None-person company mapping consistent across lf
         fallback_company = fake.random.choice(company_ids_list)
         sampled_df = sampled_df.with_columns(pl.lit(fallback_company).alias("_ip_fill_company"))
         sampled_df = sampled_df.with_columns(

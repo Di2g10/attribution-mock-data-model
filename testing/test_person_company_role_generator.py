@@ -49,4 +49,4 @@ class TestPersonCompanyRole(unittest.TestCase):
             return
 
         ok = with_end.select(pl.col(start_col) < pl.col(end_col)).to_series().all()
-        self.assertTrue(ok, "Found rows where start_date is not before end_date")
+        self.assertTrue(ok, "Found lf where start_date is not before end_date")

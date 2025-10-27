@@ -42,9 +42,9 @@ PERSON_ROLE_WEIGHTS = [
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a DataFrame of person data.
 
-    :param n: Number of rows to generate
+    :param n: Number of lf to generate
     :param kwargs: May include `prior` mapping of previously generated objects
-    :returns: Polars DataFrame of Person rows including `companyid`
+    :returns: Polars DataFrame of Person lf including `companyid`
     """
     # Try to source Company IDs from prior for FK coherence
     prior = kwargs.get("prior", {})

@@ -167,3 +167,11 @@ align_within = "select_clause"
 # when we hit brackets is usually a good rule of thumb for this
 # configuration.
 align_scope = "bracketed"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "testing"
+]
+filterwarnings = [
+    "ignore:Data Validation extension is not supported and will be removed:UserWarning"
+]

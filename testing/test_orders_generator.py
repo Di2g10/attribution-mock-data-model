@@ -155,9 +155,9 @@ def orders_df(
 # ---------------------------------------------------------------------------
 
 
-def test_orders_unique_ids(basic_prior: dict[str, pl.DataFrame]) -> None:
+def test_orders_unique_ids(marketing_activity_prior: dict[str, pl.DataFrame]) -> None:
     """Ensure `order_id` values are unique and row count correct."""
-    df = generate_orders(LARGE_SAMPLE_SIZE, prior=basic_prior)
+    df = generate_orders(LARGE_SAMPLE_SIZE, prior=marketing_activity_prior)
     ids = df.select("order_id").to_series()
     assert ids.is_unique().all()
     assert df.height == LARGE_SAMPLE_SIZE
@@ -173,17 +173,17 @@ def test_orders_with_related_objects(
     assert "order_id" in df.columns
 
 
-def test_order_dates(basic_prior: dict[str, pl.DataFrame]) -> None:
+def test_order_dates(marketing_activity_prior: dict[str, pl.DataFrame]) -> None:
     """Test that order completion dates are always after order raised dates."""
-    df = generate_orders(SMALL_SAMPLE_SIZE, prior=basic_prior)
+    df = generate_orders(SMALL_SAMPLE_SIZE, prior=marketing_activity_prior)
     starts = df.select("date_raised").to_series()
     ends = df.select("date_completed").to_series()
     assert all(e > s for s, e in zip(starts, ends))
 
 
-def test_order_amounts(basic_prior: dict[str, pl.DataFrame]) -> None:
+def test_order_amounts(marketing_activity_prior: dict[str, pl.DataFrame]) -> None:
     """Test that order monetary values are positive numbers."""
-    df = generate_orders(SMALL_SAMPLE_SIZE, prior=basic_prior)
+    df = generate_orders(SMALL_SAMPLE_SIZE, prior=marketing_activity_prior)
     for col in ["sales_order_value", "initial_contract_value"]:
         vals = df.select(col).to_series()
         assert all((isinstance(v, (int, float)) and v > 0) for v in vals)

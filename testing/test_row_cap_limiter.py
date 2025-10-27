@@ -1,7 +1,7 @@
-"""Tests to confirm the max_rows_per_object limiter truncates generated rows.
+"""Tests to confirm the max_rows_per_object limiter truncates generated lf.
 
 This test uses the shared workbook_path fixture which configures Company with
-100 rows in the minimal workbook. We set a very small cap and ensure the
+100 lf in the minimal workbook. We set a very small cap and ensure the
 returned DataFrame and the written CSV both reflect the cap.
 """
 
@@ -15,11 +15,11 @@ from src.orchestrator import build
 
 
 def test_row_cap_limiter_truncates_company(tmp_path: Path, workbook_path: Path) -> None:
-    """Verify that setting max_rows_per_object enforces a hard cap on rows.
+    """Verify that setting max_rows_per_object enforces a hard cap on lf.
 
-    The minimal workbook fixture defines Company with 100 rows. By using a cap of 3,
-    we expect the generated Company DataFrame to have exactly 3 rows, and the output
-    CSV to contain 3 data rows as well.
+    The minimal workbook fixture defines Company with 100 lf. By using a cap of 3,
+    we expect the generated Company DataFrame to have exactly 3 lf, and the output
+    CSV to contain 3 data lf as well.
     """
     cap = 3
     out_dir = tmp_path / "out"

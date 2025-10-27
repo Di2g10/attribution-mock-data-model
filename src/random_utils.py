@@ -235,7 +235,7 @@ def generate_source_id_mappings(
     """Generate a dummy mapping of source IDs across multiple source tables.
 
     :param sources: List of (source_table, source_id_field) pairs.
-    :param n: Total number of rows to generate.
+    :param n: Total number of lf to generate.
     :param seed: Random seed for reproducibility.
     :returns: Polars DataFrame with columns: ``Source Table``, ``Source ID Field``, ``Source ID``.
     """

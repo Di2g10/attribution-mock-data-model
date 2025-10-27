@@ -32,6 +32,7 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
         {
             "person_id": ["PER0000001", "PER0000002"],
             "first_name": ["John", "Jane"],
+            "company_id": ["CO0000001", "CO0000002"],
         }
     )
 

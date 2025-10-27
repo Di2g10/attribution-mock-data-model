@@ -32,13 +32,7 @@ def main() -> None:
             print(f"Input directory not found: {input_dir}")
             return
 
-    # Allow optional per-object row cap via environment variable TEST_MAX_ROWS or default None
-    import os
-
-    max_rows_env = os.getenv("TEST_MAX_ROWS")
-    max_rows = int(max_rows_env) if max_rows_env and max_rows_env.isdigit() else None
-
-    build(structure_file_path, overwrite=True, max_rows_per_object=max_rows)
+    build(structure_file_path, overwrite=True)
 
 
 if __name__ == "__main__":

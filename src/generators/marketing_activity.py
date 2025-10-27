@@ -1,4 +1,4 @@
-"""Generate synthetic Marketing Activity rows (Pull + Push logic enforced)."""
+"""Generate synthetic Marketing Activity lf (Pull + Push logic enforced)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from ..validation import extract_id_column
 __all__ = ["generate"]
 
 CONTROL_PROBABILITY = 0.10
-COMPANY_TARGET_RATIO = 0.50  # for Push rows: 50 % company, 50 % person
+COMPANY_TARGET_RATIO = 0.50  # for Push lf: 50 % company, 50 % person
 
 STATUS: Sequence[str] = ["Sent", "Delivered", "Viewed", "Bounced", "Failed", "Scheduled"]
 STATUS_W: Sequence[float] = [0.25, 0.25, 0.20, 0.10, 0.08, 0.12]

@@ -54,7 +54,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     Attributes sheet for column selection. If the sheet is unavailable, a
     small sensible default is returned.
 
-    :param n: Number of rows to generate (typically 1).
+    :param n: Number of lf to generate (typically 1).
     :param kwargs: Additional context. Recognised keys: ``registry``.
     :returns: Polars DataFrame of the Attribution Model object.
     :raises ValueError: If ``n`` is less than 1.

@@ -53,7 +53,7 @@ class TestBestProductYCA(unittest.TestCase):
             outcome_col="outcome_product_id",
             campaign_col="campaign_product_id",
             asset_col="asset_product_id",
-        )
+        ).collect()
         self.assertEqual(result.item(), "Tier 2")
 
     def test_uses_asset_when_better_or_only(self) -> None:
@@ -73,7 +73,7 @@ class TestBestProductYCA(unittest.TestCase):
             outcome_col="outcome_product_id",
             campaign_col="campaign_product_id",
             asset_col="asset_product_id",
-        )
+        ).collect()
         self.assertEqual(result.item(), "Tier 2")
 
     def test_null_when_no_ids(self) -> None:
@@ -92,7 +92,7 @@ class TestBestProductYCA(unittest.TestCase):
             outcome_col="outcome_product_id",
             campaign_col="campaign_product_id",
             asset_col="asset_product_id",
-        )
+        ).collect()
         self.assertIsNone(result.item())
 
 
@@ -133,13 +133,13 @@ class TestCreateAncestory(unittest.TestCase):
 
     # ------------------------------------------------------------------
     def test_closure_rows(self) -> None:
-        """All (node, ancestor, distance) rows should be present."""
+        """All (node, ancestor, distance) lf should be present."""
         closure = _create_ancestry(self.df, row_id="company_id", parent_id="parent_id")
 
         self.assertSetEqual(
             set(map(tuple, closure.rows())),
             self.expected_rows,
-            msg="Closure rows or distances are incorrect",
+            msg="Closure lf or distances are incorrect",
         )
 
     # ------------------------------------------------------------------
@@ -176,7 +176,7 @@ class TestBuildLinks(unittest.TestCase):
     def test_schema(self) -> None:
         """Check the Links table has the expected columns in order."""
         self.assertListEqual(
-            self.links.columns,
+            self.links.collect_schema().names(),
             ["from_id", "to_id", "ancestor_id", "degrees"],
         )
 
@@ -202,7 +202,7 @@ class TestBuildLinks(unittest.TestCase):
             (4, 4, 4, 0),
         }
         self.assertSetEqual(
-            set(map(tuple, self.links.rows())),
+            set(map(tuple, self.links.collect().rows())),
             expected,
             msg="Link set is incomplete, non-symmetric, or contains wrong degrees.",
         )
@@ -214,7 +214,9 @@ class TestBuildLinks(unittest.TestCase):
         E.g. 2↔4 should use ancestor 2 (degrees 1), not root 1 (degrees 3).
         """
         from_id, to_id = 2, 4
-        subset = self.links.filter((pl.col("from_id") == from_id) & (pl.col("to_id") == to_id))
+        subset = self.links.filter(
+            (pl.col("from_id") == from_id) & (pl.col("to_id") == to_id)
+        ).collect()
         self.assertEqual(
             subset.select("degrees").item(),
             1,
@@ -290,7 +292,7 @@ class TestStringIds(unittest.TestCase):
         }
 
         self.assertSetEqual(
-            set(map(tuple, self.links.rows())),
+            set(map(tuple, self.links.collect().rows())),
             exp_links,
             msg="String-ID link table incorrect or non-symmetric.",
         )
@@ -299,7 +301,7 @@ class TestStringIds(unittest.TestCase):
     def test_schema_string_ids(self) -> None:
         """Ensure symmetric link table and correct hop counts with string IDs."""
         self.assertListEqual(
-            self.links.columns,
+            self.links.collect_schema().names(),
             ["from_id", "to_id", "ancestor_id", "degrees"],
         )
 

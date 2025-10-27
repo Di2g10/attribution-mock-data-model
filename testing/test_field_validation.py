@@ -93,7 +93,7 @@ class TestFieldValidation(unittest.TestCase):
 
     def test_generator_fields_match_spreadsheet(self) -> None:
         """Test that generator fields match the spreadsheet."""
-        # Generate data for all objects (cap rows to speed up test runs)
+        # Generate data for all objects (cap lf to speed up test runs)
         generated_data = build(self.structure_file_path, overwrite=True, max_rows_per_object=1000)
 
         # Track errors for all objects
