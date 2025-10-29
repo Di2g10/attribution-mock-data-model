@@ -10,6 +10,7 @@ from __future__ import annotations
 import polars as pl
 
 from src.generators.interactions import generate as generate_interactions
+from testing.test_interactions_generator import get_registry
 
 
 def prior_with_null_company_and_no_roles() -> dict[str, pl.DataFrame]:
@@ -35,13 +36,22 @@ def prior_with_null_company_and_no_roles() -> dict[str, pl.DataFrame]:
             "marketing_activity_id": ["ACTX1", "ACTX2", "ACTX3"],
             "targeted_person_id": ["PIP0001", "PIP0002", "PIP0001"],
             "targeted_company_id": [None, None, None],
+            "channel_id": ["CHAN0000001", "CHAN0000002", "CHAN0000002"],
+        }
+    )
+
+    channels_df = pl.DataFrame(
+        {
+            "channel_id": ["CHAN0000001", "CHAN0000002", "CHAN0000003"],
+            "channel_name": ["Social Outbound Messages", "Email", "Direct Mail"],
         }
     )
 
     return {
         "Company": company_df,
         "Person": person_df,
-        "Marketing Activity": activity_df,
+        "Marketing Activity": activity_df,  # Can also add "Pull Activity" if needed
+        "Channels": channels_df,
     }
 
 
@@ -49,7 +59,7 @@ def test_ip_company_match_populates_company() -> None:
     """Test that IP Company Match interactions are populated with a company."""
     prior = prior_with_null_company_and_no_roles()
     # Generate a moderate number to increase chance of IP Company Match identification
-    df = generate_interactions(50, prior=prior, keep_channel=True)
+    df = generate_interactions(50, prior=prior, registry=get_registry(), keep_channel=True)
 
     # Focus on df that were IP-matched and had person cleared
     ip_rows = df.filter(

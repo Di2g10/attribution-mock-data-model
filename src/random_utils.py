@@ -128,7 +128,6 @@ def weighted_sample(
 def generate_mapped_values(
     parent_values: Sequence[str],
     mapping_dict: Mapping[str, Sequence[Any]],
-    fallback_values: Optional[Sequence[Any]] = None,
     verbose: bool = False,
 ) -> list[Any]:
     """Generate child values based on parent categories using a mapping dictionary.
@@ -177,7 +176,7 @@ def generate_mapped_values(
         return []
 
     # If mapping_dict is empty and no fallback, return None for each parent
-    if not mapping_dict and fallback_values is None:
+    if not mapping_dict:
         return [None] * len(parent_values)
 
     # Pre-generate child values for each parent category
@@ -215,10 +214,6 @@ def generate_mapped_values(
         if child_map.get(parent):
             # Use modulo to cycle through the pre-generated child values if needed
             result.append(child_map[parent][(count - 1) % len(parent_values)])
-        elif fallback_values:
-            # Use fallback values if provided
-            idx = _rng.integers(0, len(fallback_values))
-            result.append(fallback_values[idx])
         else:
             # No mapping and no fallback
             result.append(None)

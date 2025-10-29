@@ -8,7 +8,6 @@ import polars as pl
 
 from src.generators.interactions import (
     generate as generate_interactions,
-    DEFAULT_CHANNEL_INTERACTION_TYPES,
 )
 from src.config_loader import Config
 from src.schema_registry import SchemaRegistry
@@ -41,6 +40,14 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
             "marketing_activity_id": ["ACT0000001", "ACT0000002"],
             "targeted_person_id": ["PER0000001", "PER0000002"],
             "targeted_company_id": ["CO0000001", "CO0000002"],
+            "channel_id": ["CHAN0000001", "CHAN0000002"],
+        }
+    )
+
+    channels_df = pl.DataFrame(
+        {
+            "channel_id": ["CHAN0000001", "CHAN0000002", "CHAN0000003"],
+            "channel_name": ["Social Outbound Messages", "Email", "Direct Mail"],
         }
     )
 
@@ -48,12 +55,24 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
         "Company": company_df,
         "Person": person_df,
         "Marketing Activity": activity_df,  # Can also add "Pull Activity" if needed
+        "Channels": channels_df,
     }
+
+
+def get_registry() -> SchemaRegistry:
+    """Generate a schema registry from the spreadsheet-backed design file."""
+    workbook = (
+        Path(__file__).parent.parent / "data" / "input" / "Low Level Field Detail Design.xlsx"
+    )
+    cfg = Config(workbook)
+    return SchemaRegistry(cfg)
 
 
 def test_interactions_unique_ids() -> None:
     """Test that generated interaction IDs are unique."""
-    df = generate_interactions(LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities())
+    df = generate_interactions(
+        LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities(), registry=get_registry()
+    )
     ids = df.select("interaction_id").to_series()
     assert ids.is_unique().all(), "interaction_id values should be unique"
     assert df.height == LARGE_SAMPLE_SIZE
@@ -63,7 +82,8 @@ def test_interactions_with_related_objects() -> None:
     """Test that interactions correctly relate to persons, companies, and activities."""
     # Arrange: load mock prior data with companies, persons, and push activities
     prior = minimal_prior_with_activities()
-    df = generate_interactions(LARGE_SAMPLE_SIZE, prior=prior, keep_channel=True)
+    registry = get_registry()
+    df = generate_interactions(LARGE_SAMPLE_SIZE, prior=prior, registry=registry, keep_channel=True)
 
     assert df.height == LARGE_SAMPLE_SIZE
     assert "interaction_id" in df.columns
@@ -177,18 +197,13 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         # First pull types from the spreadsheet
         if not self.interaction_types_df.is_empty():
             for row in self.interaction_types_df.iter_rows(named=True):
-                channel = row.get("Channel", "")
+                channel = row.get("Channel Name")
                 if channel:
                     interaction_types = [
                         value for key, value in row.items() if key != "Channel" and value
                     ]
                     if interaction_types:
                         self.channel_to_interaction_types[channel] = interaction_types
-
-        # Then add any defaults not present in the spreadsheet
-        for channel, interaction_types in DEFAULT_CHANNEL_INTERACTION_TYPES.items():
-            if channel not in self.channel_to_interaction_types:
-                self.channel_to_interaction_types[channel] = interaction_types
 
         # Minimal valid `prior` so the generator can link Interaction -> Activity -> Person/Company
         # We reuse the shared helper defined earlier in this module.
@@ -216,7 +231,9 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         )
 
         # Basic shape/columns
-        self.assertIn("channel", df.columns, "Generated interactions should have a 'channel' field")
+        self.assertIn(
+            "channel_name", df.columns, "Generated interactions should have a 'channel' field"
+        )
         self.assertIn(
             "interaction_type",
             df.columns,
@@ -224,7 +241,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         )
 
         # Channels must be known
-        for channel in df["channel"].to_list():
+        for channel in df["channel_name"].to_list():
             self.assertIn(
                 channel,
                 self.channel_to_interaction_types.keys(),
@@ -233,7 +250,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
 
         # Types must be valid for the channel
         for row in df.iter_rows(named=True):
-            channel = row["channel"]
+            channel = row["channel_name"]
             interaction_type = row["interaction_type"]
             valid_types = self.channel_to_interaction_types.get(channel, [])
             self.assertIn(
@@ -290,3 +307,7 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
                 )
             ),
         )
+
+
+if __name__ == "__main__":
+    test_interactions_unique_ids()

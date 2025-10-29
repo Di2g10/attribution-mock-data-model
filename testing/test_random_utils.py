@@ -25,18 +25,6 @@ def test_empty_mapping_dict_no_fallback() -> None:
     assert result == [None, None, None]
 
 
-def test_empty_mapping_dict_with_fallback() -> None:
-    """Test with empty mapping dict but with fallback values."""
-    seed_everything(42)
-    fallback = ["default1", "default2"]
-    result = generate_mapped_values(["A", "B", "C"], {}, fallback_values=fallback)
-    target_length = 3
-    assert len(result) == target_length
-    # All results should be from fallback values
-    for val in result:
-        assert val in fallback
-
-
 def test_basic_mapping() -> None:
     """Test basic mapping functionality with simple data."""
     seed_everything(42)
@@ -53,23 +41,6 @@ def test_basic_mapping() -> None:
     assert result[2] in mapping["Channel_A"]
     # Second should be from Channel_B's types
     assert result[1] in mapping["Channel_B"]
-
-
-def test_unmapped_parent_with_fallback() -> None:
-    """Test behavior when parent is not in mapping but fallback exists."""
-    seed_everything(42)
-    parent_values = ["Known", "Unknown", "Known"]
-    mapping = {"Known": ["A", "B"]}
-    fallback = ["FallbackX", "FallbackY"]
-
-    result = generate_mapped_values(parent_values, mapping, fallback_values=fallback)
-    target_length = 3
-    assert len(result) == target_length
-    # First and third should be from Known mapping
-    assert result[0] in mapping["Known"]
-    assert result[2] in mapping["Known"]
-    # Second (Unknown) should be from fallback
-    assert result[1] in fallback
 
 
 def test_unmapped_parent_without_fallback() -> None:
@@ -124,13 +95,12 @@ def test_empty_child_values_list() -> None:
     seed_everything(42)
     parent_values = ["A", "B"]
     mapping = {"A": [], "B": ["value1", "value2"]}
-    fallback = ["fallback"]
 
-    result = generate_mapped_values(parent_values, mapping, fallback_values=fallback)
+    result = generate_mapped_values(parent_values, mapping)
     target_length = 2
     assert len(result) == target_length
     # A should use fallback since it has empty child values
-    assert result[0] in fallback
+    assert result[0] is None
     # B should use its mapping
     assert result[1] in mapping["B"]
 

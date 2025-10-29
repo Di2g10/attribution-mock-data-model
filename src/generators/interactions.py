@@ -27,37 +27,6 @@ __all__ = [
 
 from ..validation import extract_id_column
 
-# Default channels with their associated interaction types
-# This will be used as a fallback if the configuration doesn't provide this information
-DEFAULT_CHANNEL_INTERACTION_TYPES: Dict[str, List[str]] = {
-    "Paid Digital Ads": ["Viewed", "Clicked", "Submit Form"],
-    "Content Syndication": ["Viewed", "Clicked", "Submit Form"],
-    "Web": ["Page View", "Link Click", "Submit Form", "Watch Video", "Download", "Live Chat?"],
-    "Above the Line - Non Digital": ["Viewed"],
-    "Social Posts": ["Viewed", "Clicked", "Responded"],
-    "Social Outbound Messages": ["Viewed", "Clicked", "Responded", "Opt-Out"],
-    "Virtual Events": ["Registered", "Attended", "View on Demand"],
-    "F2F Events": ["Registered", "Attended"],
-    "Webinars": ["Registered", "Attended", "View on Demand"],
-    "Direct Mail": ["Sent", "Delivered", "Bounced"],
-    "Whatsapp": ["Sent", "Received", "Read", "Clicked", "Responded", "Opt-Out"],
-    "RCS": ["Sent", "Received", "Read", "Clicked", "Responded", "Opt-Out"],
-    "Email": ["Sent", "Received", "Bounced", "Opened", "Clicked", "Opt-Out", "Responded"],
-    "SMS": ["Sent", "Received", "Bounced", "Clicked", "Responsed", "Opt-Out"],
-    "MMS": ["Sent", "Received", "Bounced", "Clicked", "Responsed", "Opt-Out"],
-    "App Push Notification": ["Sent", "Received", "Clicked"],
-    "Sales Meetings": ["Invited", "Attended"],
-    "Sales Calls": ["Dialled", "Answered", "Engaged"],
-    "Sales Email": ["Sent", "Received", "Bounced", "Opened", "Clicked", "Opt-Out", "Responded"],
-    "Inbound Calls": ["Called"],
-    "Phone": ["Phone Call"],
-    "In Person": ["Meeting", "Demo", "Training", "Consultation"],
-    "Chat": ["Chat"],
-    "Social Media": ["Social Media"],
-    "Video": ["Video Call"],
-    "Support": ["Support Ticket"],
-}
-
 # Default weights for channels (higher weight = more common)
 DEFAULT_CHANNEL_WEIGHTS = {
     "Paid Digital Ads": 0.04,
@@ -76,16 +45,12 @@ DEFAULT_CHANNEL_WEIGHTS = {
     "SMS": 0.04,
     "MMS": 0.04,
     "App Push Notification": 0.04,
-    "Sales Meetings": 0.04,
-    "Sales Calls": 0.04,
-    "Sales Email": 0.04,
+    "Telemarketing": 0.25,
+    "Online Chat": 0.10,
+    "Salesperson Meetings": 0.04,
+    "Salesperson Calls": 0.04,
+    "Salesperson Email": 0.04,
     "Inbound Calls": 0.04,
-    "Phone": 0.25,
-    "In Person": 0.15,
-    "Chat": 0.10,
-    "Social Media": 0.05,
-    "Video": 0.05,
-    "Support": 0.10,
 }
 
 # Interaction direction with weights
@@ -128,54 +93,40 @@ def generate_basic_data(n: int) -> Tuple[List[str], List[Any], List[int]]:
     return ids, interaction_dates, durations
 
 
-def get_channel_data_from_registry(registry: Any) -> Tuple[Dict[str, List[str]], Dict[str, float]]:
+def get_channel_data_from_registry(registry: Any) -> Dict[str, List[str]]:
     """Get channels and interaction types from registry.
 
     :param registry: The schema registry containing channel and interaction type data
     :returns: Tuple of (channel_interaction_types, channel_weights)
     """
-    channel_interaction_types = DEFAULT_CHANNEL_INTERACTION_TYPES.copy()
-    channel_weights = DEFAULT_CHANNEL_WEIGHTS.copy()
-
     if registry is None:
-        return channel_interaction_types, channel_weights
+        raise ValueError("Registry is required to load channel and interaction types.")
 
-    try:
-        # Get channels from registry
-        channels_df = registry.cfg.channels
-        if not channels_df.is_empty():
-            # Extract channel names
-            channel_names = channels_df["Channel Name"].to_list()
-            # Update channel weights with equal weights if not already defined
-            for channel in channel_names:
-                if channel not in channel_weights:
-                    channel_weights[channel] = 1.0 / len(channel_names)
+    channel_interaction_types: Dict[str, List[str]] = {}
 
-            # Get interaction types from registry
-            interaction_types_df = registry.cfg.interaction_types
-            if not interaction_types_df.is_empty():
-                # Create mapping of channels to interaction types
-                for row in interaction_types_df.iter_rows(named=True):
-                    channel = row.get("Channel", "")
-                    if channel and channel in channel_names:
-                        # Extract all non-empty values except "Channel" as interaction types
-                        interaction_types = [
-                            value
-                            for key, value in row.items()
-                            if key not in ["Channel", "Interactsion Concatnated"] and value
-                        ]
-                        if interaction_types:
-                            channel_interaction_types[channel] = interaction_types
+    # Get interaction types from registry
+    interaction_types_df = registry.cfg.interaction_types
+    if interaction_types_df.is_empty():
+        raise ValueError("No interaction types found in the registry.")
 
-            # Ensure every channel from the spreadsheet has a mapping; if missing, use fallback types
-            for channel in channel_names:
-                if channel not in channel_interaction_types:
-                    channel_interaction_types[channel] = FALLBACK_INTERACTION_TYPES[:]
-    except Exception as e:
-        # If there's an error, use the defaults
-        print(f"Error loading channels and interaction types: {e}")
+    # Create mapping of channels to interaction types
+    for row in interaction_types_df.iter_rows(named=True):
+        channel = row.get("Channel Name")
 
-    return channel_interaction_types, channel_weights
+        # Extract all non-empty values except "Channel" as interaction types
+        interaction_types: List[str] = [
+            cell
+            for col, cell in row.items()
+            if col not in ["Channel Name", "Interactions Concatenated"] and cell
+        ]
+        if interaction_types:
+            channel_interaction_types[channel] = interaction_types
+
+    empties = [ch for ch, types in channel_interaction_types.items() if len(types) == 0]
+    if empties:
+        raise ValueError(f"Channels with empty interaction type lists: {empties}.")
+
+    return channel_interaction_types
 
 
 def generate_channels(n: int, channel_weights: Dict[str, float]) -> List[str]:
@@ -209,7 +160,6 @@ def generate_interaction_types(
     return generate_mapped_values(
         parent_values=channels,
         mapping_dict=channel_interaction_types,
-        fallback_values=FALLBACK_INTERACTION_TYPES,
         verbose=True,
     )
 
@@ -409,6 +359,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # --- 1. Gather activities from Marketing Activity sources ---
     marketing_activity_df = require_df(prior.get("Marketing Activity"), "Marketing Activity")
     person_df = require_df(prior.get("Person"), "Person")
+    channel_df = require_df(prior.get("Channels"), "Channels")
     if not {"person_id", "company_id"}.issubset(person_df.columns):
         raise ValueError(
             "Missing the required person/company columns ['person_id', 'company_id'] in Person data."
@@ -426,15 +377,21 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         "random_person_id",
         weighted_sample(person_ids, n=marketing_activity_df.height),
     )
-    activities_df = marketing_activity_df.with_columns(fallback_series).select(
-        [
-            pl.col("marketing_activity_id").alias("marketing_activity_id"),
-            pl.when(pl.col("targeted_person_id").is_not_null())
-            .then(pl.col("targeted_person_id"))
-            .otherwise(pl.col("random_person_id"))
-            .alias("interacted_person_id"),
-            pl.col("targeted_company_id").alias("interacted_company_id"),
-        ]
+    activities_df = (
+        marketing_activity_df.join(channel_df, on="channel_id", how="inner", validate="m:1")
+        .with_columns(fallback_series)
+        .select(
+            [
+                pl.col("marketing_activity_id").alias("marketing_activity_id"),
+                pl.coalesce(
+                    pl.col("targeted_person_id"),
+                    pl.col("random_person_id"),
+                    pl.col("random_person_id"),
+                ).alias("interacted_person_id"),
+                pl.col("targeted_company_id").alias("interacted_company_id"),
+                pl.col("channel_name").alias("channel_name"),
+            ]
+        )
     )
 
     # --- 2. Prioritise Person Company for company derivation if available ---
@@ -493,17 +450,16 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     )
 
     # --- 5. Add remaining columns (channel, type, metadata) ---
-    channel_map, channel_weights = get_channel_data_from_registry(registry)
-    channels = generate_channels(n, channel_weights)
-    # Normalise channel synonyms to canonical names expected by design/defaults
-    _channel_canonical = {"Online Chat": "Chat"}
-    channels = [_channel_canonical.get(ch, ch) for ch in channels]
-    interaction_types = generate_interaction_types(channels, channel_map)
+    channel_map = get_channel_data_from_registry(registry)
 
     sampled_df = sampled_df.with_columns(
         [
-            pl.Series("channel", channels),
-            pl.Series("interaction_type", interaction_types),
+            pl.col("channel_name").alias("channel_name"),
+            pl.col("channel_name")
+            .replace_strict(channel_map, default=["Error"])
+            .list.sample(n=1)
+            .list.first()
+            .alias("interaction_type"),
             pl.Series(
                 "identification_method_type",
                 weighted_sample(
@@ -528,6 +484,12 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             ),
         ]
     )
+
+    # get if sample df interaction type is error and return the channel that caused the error.
+    error_rows = sampled_df.filter(pl.col("interaction_type") == "Error")
+    if not error_rows.is_empty():
+        error_channels = set(error_rows.get_column("channel_name").to_list())
+        raise ValueError(f"Error in interaction type from channel mapping:{error_channels}")
 
     # For IP-based identification, person may be unknown while company is known.
     # Force interacted_person_id to None in those cases to enable company-only linkage downstream.
@@ -627,4 +589,4 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Optionally drop channel column to maintain prior behaviour
     if kwargs.get("keep_channel", False):
         return sampled_df
-    return sampled_df.drop("channel")
+    return sampled_df.drop("channel_name")

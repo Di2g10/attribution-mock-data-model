@@ -11,6 +11,7 @@ from src.generators.interactions import generate as generate_interactions
 from src.generators.channels import generate as generate_channels
 from src.generators.marketing_assets import generate as generate_marketing_assets
 from src.generators.marketing_activity import generate as generate_marketing_activity
+from testing.test_interactions_generator import get_registry
 
 # Sample sizes used across tests
 LARGE_SAMPLE_SIZE = 20
@@ -78,7 +79,8 @@ def audience_df() -> pl.DataFrame:
 @pytest.fixture(scope="module")
 def channels_df() -> pl.DataFrame:
     """Generate a small sample of channels data for testing."""
-    return generate_channels(SMALL_SAMPLE_SIZE)
+    registry = get_registry()
+    return generate_channels(SMALL_SAMPLE_SIZE, registry=registry)
 
 
 @pytest.fixture(scope="module")
@@ -123,14 +125,18 @@ def interactions_df(
     company_df: pl.DataFrame,
     person_df: pl.DataFrame,
     marketing_activity_df: pl.DataFrame,
+    channels_df: pl.DataFrame,
 ) -> pl.DataFrame:
     """Generate interactions data with company, person, and marketing activity relationships."""
     prior = {
         "Company": company_df,
         "Person": person_df,
         "Marketing Activity": marketing_activity_df,
+        "Channels": channels_df,
     }
-    return generate_interactions(SMALL_SAMPLE_SIZE, prior=prior, keep_channel=True)
+    return generate_interactions(
+        SMALL_SAMPLE_SIZE, prior=prior, registry=get_registry(), keep_channel=True
+    )
 
 
 @pytest.fixture(scope="module")
@@ -139,6 +145,7 @@ def orders_df(
     person_df: pl.DataFrame,
     products_df: pl.DataFrame,
     interactions_df: pl.DataFrame,
+    channels_df: pl.DataFrame,
 ) -> pl.DataFrame:
     """Full Orders DataFrame with rich prior context."""
     prior = {
@@ -146,6 +153,7 @@ def orders_df(
         "Person": person_df,
         "Products": products_df,
         "Interactions": interactions_df,
+        "Channels": channels_df,
     }
     return generate_orders(SMALL_SAMPLE_SIZE, prior=prior)
 

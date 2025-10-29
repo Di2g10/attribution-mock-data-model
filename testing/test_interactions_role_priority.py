@@ -11,6 +11,7 @@ from typing import Dict
 import polars as pl
 
 from src.generators.interactions import generate as generate_interactions
+from testing.test_interactions_generator import get_registry
 
 
 def create_prior() -> Dict[str, pl.DataFrame]:
@@ -42,13 +43,22 @@ def create_prior() -> Dict[str, pl.DataFrame]:
             "marketing_activity_id": ["ACT0100001", "ACT0100002"],
             "targeted_person_id": ["PER0100001", "PER0100001"],
             "targeted_company_id": ["CO0000102", None],
+            "channel_id": ["CHAN0000001", "CHAN0000002"],
+        }
+    )
+
+    channels_df = pl.DataFrame(
+        {
+            "channel_id": ["CHAN0000001", "CHAN0000002", "CHAN0000003"],
+            "channel_name": ["Social Outbound Messages", "Email", "Direct Mail"],
         }
     )
 
     return {
         "Company": company_df,
         "Person": person_df,
-        "Marketing Activity": activity_df,
+        "Marketing Activity": activity_df,  # Can also add "Pull Activity" if needed
+        "Channels": channels_df,
     }
 
 
@@ -56,7 +66,7 @@ def test_role_priority_over_targeted_company() -> None:
     """Role-based company should override targeted_company_id when they differ."""
     prior = create_prior()
     # Generate several df to sample both activities
-    df = generate_interactions(20, prior=prior, keep_channel=True)
+    df = generate_interactions(20, prior=prior, registry=get_registry(), keep_channel=True)
 
     # All df for this person should point to the role company CO0000101
     rows = df.filter(pl.col("interacted_person_id") == "PER0100001")
@@ -69,7 +79,7 @@ def test_role_priority_over_targeted_company() -> None:
 def test_role_fills_when_targeted_company_null() -> None:
     """When targeted_company_id is null, role-derived company must be used."""
     prior = create_prior()
-    df = generate_interactions(10, prior=prior, keep_channel=False)
+    df = generate_interactions(10, prior=prior, registry=get_registry(), keep_channel=False)
 
     rows = df.filter(pl.col("marketing_activity_id") == "ACT0100002")
     assert not rows.is_empty(), "Expected interactions from the activity with null company"
