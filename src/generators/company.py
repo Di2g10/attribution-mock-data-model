@@ -18,6 +18,56 @@ from ..random_utils import (
 
 __all__ = ["generate"]
 
+from enum import StrEnum
+
+
+class CompanyField(StrEnum):
+    """Enumerates all output columns for the Company generator, aligned to spreadsheet naming (snake_case)."""
+
+    company_id = "company_id"
+    parent_company_id = "parent_company_id"
+    company_business_type = "company_business_type"
+    company_business_start_year_number = "company_business_start_year_number"
+    company_number_of_sites_count = "company_number_of_sites_count"
+    company_trading_status = "company_trading_status"
+    company_territory_name = "company_territory_name"
+    company_sector_name = "company_sector_name"
+    sic_code = "sic_code"
+    billing_state_name = "billing_state_name"
+    company_old_market_channel_code = "company_old_market_channel_code"
+    company_active_ind = "company_active_ind"
+    soho_marketing_cohort_code = "soho_marketing_cohort_code"
+    soho_marketing_promotion_code = "soho_marketing_promotion_code"
+    deleted_flag = "deleted_flag"
+    company_status = "company_status"
+    billing_country_name = "billing_country_name"
+    billing_street_name = "billing_street_name"
+    bt_customer_ind = "bt_customer_ind"
+    company_registered_post_code = "company_registered_post_code"
+    company_live_sites_count = "company_live_sites_count"
+    company_overall_suppression_ind = "company_overall_suppression_ind"
+    billing_postal_code = "billing_postal_code"
+    sales_person_id = "sales_person_id"
+    company_registered_country_name = "company_registered_country_name"
+    annual_revenue_amount = "annual_revenue_amount"
+    website_name = "website_name"
+    company_name = "company_name"
+    company_market_channel_code = "company_market_channel_code"
+    source_id = "source_id"
+    billing_city_name = "billing_city_name"
+    employees_count = "employees_count"
+    company_trading_unit_code = "company_trading_unit_code"
+    source_id_field = "source_id_field"
+    company_old_trading_unit_code = "company_old_trading_unit_code"
+    company_death_reason_desc = "company_death_reason_desc"
+    company_aic_code = "company_aic_code"
+    industry_name = "industry_name"
+    sales_account_id = "sales_account_id"
+    source_table = "source_table"
+    soho_month_cohort_code = "soho_month_cohort_code"
+    ee_customer_ind = "ee_customer_ind"
+
+
 # Weights for verticals (higher weight = more common)
 BT_VERTICAL_WEIGHTS: dict[str, float] = {
     "Financial Services": 0.1081,
@@ -209,9 +259,6 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # registry/prior unused ye
     rng = np.random.default_rng()
 
     ids = make_ids(n, "CO")
-    # Ensure at least one owner_id even for small values of n
-    owner_count = max(1, floor(n / 20))
-    owner_ids = make_ids(owner_count, "OWN")
 
     # Generate verticals using weighted_sample (already optimized for batch operations)
     verticals = weighted_sample(
@@ -319,7 +366,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # registry/prior unused ye
     registered_country = ["United Kingdom"] * n
     registered_postcode = make_uk_postcode(n)
 
-    company_type = weighted_sample(company_types, [0.6, 0.05, 0.2, 0.1, 0.05], n)
+    company_business_type = weighted_sample(company_types, [0.6, 0.05, 0.2, 0.1, 0.05], n)
     trading_status = weighted_sample(trading_statuses, [0.88, 0.07, 0.03, 0.02], n)
     active_ind = ["Y" if s == "Trading" else "N" for s in trading_status]
 
@@ -385,7 +432,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # registry/prior unused ye
         return band
 
     size_bands = [_derive_size_band(i) for i in range(n)]
-    market_channels = size_bands
+    # market_channels = size_bands
     market_channel_codes = [size_code_map[b] for b in size_bands]
 
     # Historical/old market channel code (may differ from current)
@@ -408,59 +455,63 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # registry/prior unused ye
         death_reasons[rng.integers(0, len(death_reasons))] if a == "N" else "" for a in active_ind
     ]
 
-    return pl.DataFrame(
+    df = pl.DataFrame(
         {
-            "company_id": ids,
-            "name": fake.company(),
-            "industry": industries,
-            "Owner_ID": make_ids_with_duplicates(owner_ids, n),
-            "Parent_Company_ID": make_ids_with_duplicates(ids, n, 0.8),
-            "Company Business Type": weighted_sample(
-                ["CUG", "PHCO", "Billing Account", "Legal Entity"], [0.2, 0.2, 0.3, 0.3], n
-            ),
-            "Vertical": verticals,
-            "location": selected_locations,
-            "Company Market Channel": market_channels,
-            # Newly added fields per design
-            "companybusinessstartyearnumber": business_start_year.tolist(),
-            "companynumberofsitescount": number_of_sites.tolist(),
-            "companytradingstatus": trading_status,
-            "companyterritoryname": territory,
-            "companysectorname": sector_name,
-            "siccode": sic,
-            "billingstatename": billing_state,
-            "companyoldmarketchannelcode": old_market_channel,
-            "companyactiveind": active_ind,
-            "sohomarketingcohortcode": soho_marketing_cohort,
-            "sohomarketingpromotioncode": soho_promo,
-            "deletedflag": deleted_flag,
-            "companystatus": status,
-            "billingcountryname": billing_country,
-            "billingstreetname": billing_street,
-            "btcustomerind": bt_customer,
-            "companyregisteredpostcode": registered_postcode,
-            "companylivesitescount": live_sites.tolist(),
-            "companytype": company_type,
-            "companyoverallsuppressionind": overall_suppression,
-            "billingpostalcode": billing_postcode,
-            "salespersonid": salesperson_id,
-            "companyregisteredcountryname": registered_country,
-            "annualrevenueamount": annual_revenue,
-            "websitename": website,
-            "companyname": [fake.company() for _ in range(n)],
-            "companymarketchannelcode": market_channel_codes,
-            "sourceid": source_id,
-            "billingcityname": billing_city,
-            "employeescount": employees,
-            "companytradingunitcode": trading_unit,
-            "sourceidfield": source_id_field,
-            "companyoldtradingunitcode": old_trading_unit,
-            "companydeathreasondesc": death_reason,
-            "companyaiccode": company_ai_code,
-            "industryname": industries,
-            "salesaccountid": sales_account_id,
-            "sourcetable": source_table,
-            "sohomonthcohortcode": soho_month_cohort,
-            "eecustomerind": ee_customer,
+            CompanyField.company_id: ids,
+            CompanyField.parent_company_id: make_ids_with_duplicates(ids, n, 0.8),
+            CompanyField.company_business_type: company_business_type,
+            # Newly added / existing fields mapped to spreadsheet-aligned snake_case:
+            CompanyField.company_business_start_year_number: business_start_year.tolist(),
+            CompanyField.company_number_of_sites_count: number_of_sites.tolist(),
+            CompanyField.company_trading_status: trading_status,
+            CompanyField.company_territory_name: territory,
+            CompanyField.company_sector_name: sector_name,
+            CompanyField.sic_code: sic,
+            CompanyField.billing_state_name: billing_state,
+            CompanyField.company_old_market_channel_code: old_market_channel,
+            CompanyField.company_active_ind: active_ind,
+            CompanyField.soho_marketing_cohort_code: soho_marketing_cohort,
+            CompanyField.soho_marketing_promotion_code: soho_promo,
+            CompanyField.deleted_flag: deleted_flag,
+            CompanyField.company_status: status,
+            CompanyField.billing_country_name: billing_country,
+            CompanyField.billing_street_name: billing_street,
+            CompanyField.bt_customer_ind: bt_customer,
+            CompanyField.company_registered_post_code: registered_postcode,
+            CompanyField.company_live_sites_count: live_sites.tolist(),
+            CompanyField.company_overall_suppression_ind: overall_suppression,
+            CompanyField.billing_postal_code: billing_postcode,
+            CompanyField.sales_person_id: salesperson_id,
+            CompanyField.company_registered_country_name: registered_country,
+            CompanyField.annual_revenue_amount: annual_revenue,
+            CompanyField.website_name: website,
+            CompanyField.company_name: [fake.company() for _ in range(n)],
+            CompanyField.company_market_channel_code: market_channel_codes,
+            CompanyField.source_id: source_id,
+            CompanyField.billing_city_name: billing_city,
+            CompanyField.employees_count: employees,
+            CompanyField.company_trading_unit_code: trading_unit,
+            CompanyField.source_id_field: source_id_field,
+            CompanyField.company_old_trading_unit_code: old_trading_unit,
+            CompanyField.company_death_reason_desc: death_reason,
+            CompanyField.company_aic_code: company_ai_code,
+            CompanyField.industry_name: industries,
+            CompanyField.sales_account_id: sales_account_id,
+            CompanyField.source_table: source_table,
+            CompanyField.soho_month_cohort_code: soho_month_cohort,
+            CompanyField.ee_customer_ind: ee_customer,
         }
     )
+    # Also drop Owner_ID textual variant to avoid 'ownerid' extra after normalisation
+    # Keep Owner_ID as it's part of spreadsheet? If flagged as extra, remove here
+    drop_extras = {
+        "name",
+        "industry",
+        "Owner_ID",
+        "Vertical",
+        "location",
+        "Company Market Channel",
+        "companytype",
+    }
+    keep_cols = [c for c in df.columns if c not in drop_extras]
+    return df.select(keep_cols)

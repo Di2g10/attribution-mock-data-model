@@ -6,6 +6,7 @@ import polars as pl
 
 __all__ = ["generate"]
 
+from src.generators.company import CompanyField
 from src.random_utils import require_df
 
 _schema_base = {
@@ -28,6 +29,12 @@ _schema_enriched = {
     "channel_name": pl.String,
     "product_yca_tier": pl.String,
     "company_yca_type": pl.String,
+    # Additional fields required by spreadsheet
+    "Campaign ID": pl.String,
+    "Marketed Product ID": pl.String,
+    "Outcome Product ID": pl.String,
+    "Business Type": pl.String,
+    "Company Market Channel": pl.String,
 }
 
 
@@ -272,8 +279,8 @@ def _best_company_yca_type(
 
     # Minimal map ancestor -> business type
     comp_bt = (
-        companies_df.select(["company_id", "Company Business Type"])
-        .rename({"company_id": "_anc_id", "Company Business Type": "_anc_bt"})
+        companies_df.select([CompanyField.company_id, CompanyField.company_business_type])
+        .rename({CompanyField.company_id: "_anc_id", CompanyField.company_business_type: "_anc_bt"})
         .lazy()
     )
 
@@ -335,7 +342,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     product_links = _build_links(product_closure)
 
     company_closure = _create_ancestry(
-        company_df, row_id="company_id", parent_id="Parent_Company_ID", usage_tag="company_closure"
+        company_df,
+        row_id=CompanyField.company_id,
+        parent_id=CompanyField.parent_company_id,
+        usage_tag="company_closure",
     )
     company_links = _build_links(company_closure)
 
@@ -441,6 +451,43 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
             activity_company_col="activity_company_id",
         )
         df_enriched = pl.concat([df_enriched, company_yca_type], how="horizontal")
+
+    # Business Type and Company Market Channel from Company
+    # Create company attributes with safe fallbacks if optional columns are absent
+    if CompanyField.company_market_channel_code not in company_df.columns:
+        raise ValueError(f"{CompanyField.company_market_channel_code} is missing")
+    company_bt = company_df.select(
+        [
+            pl.col(CompanyField.company_id).alias("_co_id"),
+            pl.col(CompanyField.company_business_type).alias("_bt"),
+            pl.col(CompanyField.company_market_channel_code).alias("_cmc"),
+        ]
+    ).lazy()
+    df_enriched = df_enriched.join(
+        company_bt,
+        left_on="activity_company_id",
+        right_on="_co_id",
+        how="left",
+    )
+    # Fallback to outcome company when activity not present
+    df_enriched = df_enriched.with_columns(
+        pl.coalesce([pl.col("_bt"), pl.col("_bt")]).alias("_bt_eff")
+    ).drop("_bt")
+
+    # Columns expected in spreadsheet (title case with spaces). Values come from existing cols.
+    df_enriched = (
+        df_enriched.with_columns(
+            pl.col("campaign_id").cast(pl.Utf8).alias("Campaign ID"),
+            pl.coalesce([pl.col("campaign_product_id"), pl.col("asset_product_id")])
+            .cast(pl.Utf8)
+            .alias("Marketed Product ID"),
+            pl.col("outcome_product_id").cast(pl.Utf8).alias("Outcome Product ID"),
+            pl.col("_bt_eff").cast(pl.Utf8).alias("Business Type"),
+            pl.col("_cmc").cast(pl.Utf8).alias("Company Market Channel"),
+        )
+        .drop(["_bt_eff"])
+        .rename({})
+    )
 
     # Generate Link IDs
     pad = 7

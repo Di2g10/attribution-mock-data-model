@@ -50,6 +50,7 @@ class SchemaRegistry:
         "Marketing Assets",
         "Audience",
         "Campaigns",
+        "Campaign Spend",
         "Marketing Activity",
         "Interactions",
         "Orders",

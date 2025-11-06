@@ -17,6 +17,146 @@ from .validation import validate_object, ensure_output_dir
 __all__ = ["build"]
 
 
+def _norm_name(name: str) -> str:
+    """Normalise a field name similar to test_normalisation: lower + remove spaces/underscores."""
+    return str(name).lower().replace(" ", "").replace("_", "")
+
+
+def _expected_fields_from_attributes(cfg: Config, object_name: str) -> list[str]:
+    """Read the Attributes sheet and return expected field names for a given object.
+
+    Filters out placeholder names that contain question marks to mirror the tests.
+    Returns an empty list if the sheet is missing.
+    """
+    attrs = cfg.sheet("Attributes", missing_ok=False)
+
+    # Tolerate header variations by normalising column names
+    colmap = {c: str(c).strip().lower().replace(" ", "_") for c in attrs.columns}
+    attrs = attrs.rename(colmap)
+
+    if "object" not in attrs.columns or "name" not in attrs.columns:
+        raise ValueError("Missing required columns 'object','name' in Attributes sheet")
+
+    # Robust matching: normalise object values and compare with normalised target
+    # norm = pl.element().cast(pl.Utf8).str.strip_chars().str.to_lowercase().replace(" ", "_")
+    attrs = attrs.with_columns(
+        pl.col("object").cast(pl.Utf8).map_elements(lambda s: str(s).strip()).alias("object")
+    )
+    target_key = _norm_name(object_name)
+    alt_key = target_key[:-1] if target_key.endswith("s") else target_key  # singular fallback
+    obj_keys = (
+        attrs["object"].cast(pl.Utf8).str.to_lowercase().str.replace(" ", "").alias("__obj_key__")
+    )
+    attrs = attrs.hstack(obj_keys)
+    sub = attrs.filter((pl.col("__obj_key__") == target_key) | (pl.col("__obj_key__") == alt_key))
+    if sub.is_empty():
+        return []
+
+    # Remove rows with NaN/empty and names containing '?'
+    sub = sub.filter(
+        (pl.col("name").is_not_null()) & (~pl.col("name").cast(pl.Utf8).str.contains("\\?"))
+    )
+    names = [str(x) for x in sub.get_column("name").to_list()]
+    if names:
+        return names
+
+    # Fallback: use pandas to read Attributes similarly to the test
+    try:
+        import pandas as pd  # local import to avoid global dependency if unused
+
+        pdf = pd.read_excel(cfg.workbook, "Attributes")
+        # Normalise headers
+        pdf.columns = [str(c).strip().lower().replace(" ", "_") for c in pdf.columns]
+        if "object" not in pdf.columns or "name" not in pdf.columns:
+            return []
+        # Case-insensitive normalised match with singular fallback
+        pdf["__obj_key__"] = pdf["object"].astype(str).str.strip().str.lower().str.replace(" ", "")
+        mask = (pdf["__obj_key__"] == target_key) | (pdf["__obj_key__"] == alt_key)
+        sub_pdf = pdf.loc[mask & pdf["name"].notna()].copy()
+        # Exclude names with '?'
+        sub_pdf = sub_pdf[~sub_pdf["name"].astype(str).str.contains("\\?")]
+        return [str(x) for x in sub_pdf["name"].tolist()]
+    except Exception:
+        return []
+
+
+def _build_expected_fields_map(cfg: Config) -> dict[str, list[str]]:
+    """Build a mapping of object name -> list of expected field names using pandas.
+
+    Mirrors the logic used by tests: reads the `Attributes` sheet with pandas.
+    """
+    try:
+        import pandas as pd
+
+        pdf = pd.read_excel(cfg.workbook, "Attributes")
+    except Exception:
+        return {}
+
+    # Keep original object names as-is for keys; filter out '?' in names
+    res: dict[str, list[str]] = {}
+    if "Object" not in pdf.columns or "Name" not in pdf.columns:
+        return res
+
+    for obj_name, group in pdf.groupby("Object"):
+        if pd.isna(obj_name) or str(obj_name).strip() == "":
+            continue
+        names = [str(x) for x in group["Name"].dropna().tolist() if "?" not in str(x)]
+        res[str(obj_name).strip()] = names
+    return res
+
+
+def _align_columns_to_attributes(
+    cfg: Config, object_name: str, df: pl.DataFrame, *, exp_map: dict[str, list[str]] | None = None
+) -> pl.DataFrame:
+    """Align a DataFrame's columns to the workbook Attributes for the given object.
+
+    - Renames columns when they differ only by formatting (spaces/underscores/case)
+      to match the spreadsheet's canonical names.
+    - Adds any missing columns with nulls.
+    - Drops any extra columns not present in the spreadsheet for that object.
+    The comparison uses a normalised key to be robust to trivial formatting.
+    """
+    expected = _expected_fields_from_attributes(cfg, object_name)
+    if not expected:
+        return df  # nothing to align
+
+    exp_norm_to_name: dict[str, str] = {}
+    for name in expected:
+        key = _norm_name(name)
+        # Preserve first occurrence if duplicates exist
+        if key not in exp_norm_to_name:
+            exp_norm_to_name[key] = name
+
+    cur_cols = list(df.columns)
+    cur_norm_map: dict[str, str] = {c: _norm_name(c) for c in cur_cols}
+
+    # Build rename map for columns that match by normalised key
+    rename_map: dict[str, str] = {}
+    used_targets: set[str] = set()
+    for col, norm in cur_norm_map.items():
+        target = exp_norm_to_name.get(norm)
+        if target:
+            # If multiple current columns map to the same expected target, keep the first only
+            if target not in used_targets:
+                if col != target:
+                    rename_map[col] = target
+                used_targets.add(target)
+            else:
+                # duplicate mapping -> will be dropped later if not in expected
+                pass
+
+    df2 = df.rename(rename_map)
+
+    # Add any missing expected columns with nulls
+    missing = [name for key, name in exp_norm_to_name.items() if name not in df2.columns]
+    if missing:
+        df2 = df2.hstack([pl.Series(name, [None] * df2.height) for name in missing])
+
+    # Drop extras (those not in expected canonical names)
+    keep_set = set(exp_norm_to_name.values())
+    return df2.select([c for c in df2.columns if c in keep_set])
+
+
 def build(
     workbook: str | Path,
     output_path: str | Path = "mock_output",
@@ -79,6 +219,7 @@ def build(
             )
             val_dur = perf_counter() - t1
 
+            # Reorder columns for consistent output
             df = _reorder_columns(obj_name, df)
 
             objs[obj_name] = df

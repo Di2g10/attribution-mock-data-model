@@ -17,7 +17,7 @@ def normalize_field_name(name: str) -> str:
     This ensures that field names like 'causal_interaction' and 'causalinteractionid'
     are treated as equivalent.
     """
-    return name.lower().replace(" ", "").replace("_", "")
+    return name  # name.lower().replace(" ", "").replace("_", "")
 
 
 def get_expected_fields_from_spreadsheet(excel_file_path: Path) -> dict[str, set[str]]:

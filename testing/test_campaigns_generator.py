@@ -26,15 +26,15 @@ def test_campaigns_unique_ids(products_df: pl.DataFrame) -> None:
 
 
 def test_campaign_dates(products_df: pl.DataFrame) -> None:
-    """Test that campaign end dates are after start dates."""
+    """Test that overall timeline end dates are after start dates."""
     df = generate(SMALL_SAMPLE_SIZE, prior={"Products": products_df})
 
     # Convert to Python datetime objects for comparison
-    start_dates = df.select("start_date").to_series().to_list()
-    end_dates = df.select("end_date").to_series().to_list()
+    start_dates = df.select("overall_timeline_start").to_series().to_list()
+    end_dates = df.select("overall_timeline_end").to_series().to_list()
 
     # Check that each end date is after its corresponding start date
     for i in range(len(start_dates)):
         assert (
             end_dates[i] > start_dates[i]
-        ), f"End date should be after start date for campaign {i}"
+        ), f"overall_timeline_end should be after overall_timeline_start for campaign {i}"

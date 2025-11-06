@@ -11,7 +11,6 @@ from ..random_utils import (
     fake,
     make_ids,
     random_date,
-    make_ids_with_duplicates,
     weighted_sample,
     require_df,
 )
@@ -213,6 +212,7 @@ BT_PARTNERS = [
     "Publicis Groupe",
     "Omnicom Group",
     "IPG Mediabrands",
+    "",
 ]
 
 # Weights for partners (technology partners have higher weights)
@@ -264,6 +264,7 @@ BT_PARTNER_WEIGHTS = [
     0.01,  # Publicis Groupe
     0.01,  # Omnicom Group
     0.01,  # IPG Mediabrands
+    0.7,
 ]
 
 
@@ -298,45 +299,67 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         for product, situation, year in zip(bt_products, situations, years)
     ]
 
-    # Generate campaign data
-    df = pl.DataFrame(
+    # Generate campaign data aligned to spreadsheet (snake_case names)
+    monday_creation = [random_date() for _ in ids]
+    agency_support = [fake.random_element([True, False]) for _ in ids]
+    segments = weighted_sample(["SMB", "CPS", "Global", "Wholesale"], [0.5, 0.3, 0.1, 0.1], n)
+
+    # Derive planned/live dates relative to overall timeline
+    planned_starts = start_dates
+    live_dates = [s + timedelta(days=fake.random_int(min=0, max=14)) for s in planned_starts]
+
+    return pl.DataFrame(
         {
             "campaign_id": ids,
             "campaign_name": campaign_names,
-            "start_date": start_dates,
-            "end_date": end_dates,
-            "created_date": [random_date() for _ in ids],
-            # Fields required by the spreadsheet
+            "overall_timeline_start": start_dates,
+            "overall_timeline_end": end_dates,
+            "monday_record_creation_dtm": monday_creation,
             "objective": weighted_sample(OBJECTIVE, OBJECTIVE_WEIGHTS, n),
-            "outcome_targets": [fake.text(max_nb_chars=50) for _ in ids],
-            "costs_actuals": [fake.random_int(min=1000, max=400000) for _ in ids],
-            "costs_anticipated": [fake.random_int(min=5000, max=500000) for _ in ids],
-            "brand": ["BT" for _ in ids],  # Set brand to BT since we're using BT products
-            "budget_timeframe": weighted_sample(
-                ["Monthly", "Quarterly", "Annual", "One-time"], [0.3, 0.3, 0.3, 0.1], n
+            "campaign_summary": [fake.text(max_nb_chars=80) for _ in ids],
+            "brand": ["bt"] * n,
+            "marketing_lead": weighted_sample(DMO_OWNERS, n=n),
+            "partner": weighted_sample(BT_PARTNERS, BT_PARTNER_WEIGHTS, n),
+            "product_id": weighted_sample(product_ids, n=n),
+            "segment": segments,
+            "business_unit": segments,  # alias aligns to spreadsheet "businessunit"
+            # Added fields from spreadsheet
+            "campaign_planned_start_date": planned_starts,
+            "campaign_live_date": live_dates,
+            "activity_type": weighted_sample(CAMPAIGN_TYPES, CAMPAIGN_TYPE_WEIGHTS, n),
+            "activity_status": weighted_sample(CAMPAIGN_STATUS, CAMPAIGN_STATUS_WEIGHTS, n),
+            "purpose": weighted_sample(["acquisition", "retention", "upsell", "awareness"], n=n),
+            "engagement_stage_classification": weighted_sample(
+                ["TOFU", "MOFU", "BOFU"], [0.4, 0.4, 0.2], n
             ),
-            "dmo_owner": weighted_sample(DMO_OWNERS, n=n),
-            "partner": [
+            "product_area": weighted_sample(BT_PRODUCTS, BT_PRODUCT_WEIGHTS, n),
+            "vertical": weighted_sample(CAMPAIGN_SITUATIONS, CAMPAIGN_SITUATION_WEIGHTS, n),
+            "agency_name": [
                 (
                     weighted_sample(BT_PARTNERS, BT_PARTNER_WEIGHTS, 1)[0]
-                    if fake.random.random() < PARTNER_PROBABILITY
+                    if agency_support[i]
                     else None
                 )
-                for _ in ids
+                for i in range(n)
             ],
-            "product_id": weighted_sample(product_ids, n=n),
-            "business_unit": weighted_sample(
-                ["SMB", "CPS", "Global", "Wholesale"],
-                [0.5, 0.3, 0.1, 0.1],
-                n,
-            ),
-            "targeted_audience_id": [f"AUD{fake.random_int(min=1000, max=9999)}" for _ in ids],
-            "source_table": ["Campaign Management"] * n,
+            "agency_support_flag": agency_support,
+            "theme": weighted_sample(["launch", "promo", "brand", "retail"], n=n),
+            "strategic_pillar": weighted_sample(["growth", "retention", "efficiency"], n=n),
+            "region": weighted_sample(["UK", "EMEA", "Global"], [0.8, 0.15, 0.05], n),
+            "contributers": [fake.name() for _ in ids],
+            "team": weighted_sample(["Demand Gen", "Brand", "Product Marketing", "Field"], n=n),
+            "dmo_monday_id": [f"MON{fake.random_int(min=1000, max=999999)}" for _ in ids],
+            "outcome_linearroi_flag": weighted_sample([True, False], [0.2, 0.8], n),
+            "estimated_outcome_roi_x1": [
+                round(fake.random_number(digits=2, fix_len=False) / 10, 2) for _ in ids
+            ],
+            "estimated_outcome_sov": [
+                round(fake.random_number(digits=2, fix_len=False) / 10, 2) for _ in ids
+            ],
+            "estimated_outcome_gross_margin": [fake.random_int(min=10, max=90) for _ in ids],
+            # Provenance fields (kept if present in spreadsheet)
+            "source_table": ["campaign_management"] * n,
             "source_id_field": ["campaign_id"] * n,
-            "source_id": [f"CMP{i:04d}" for i in range(1, n + 1)],
+            "source_id": [f"cmp{i:04d}" for i in range(1, n + 1)],
         }
     )
-
-    # Add parent_campaign_id (some campaigns are child campaigns of others)
-    # About 30% of campaigns have a parent campaign
-    return df.with_columns(pl.Series("parent_campaign_id", make_ids_with_duplicates(ids, n, 0.7)))

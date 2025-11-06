@@ -24,6 +24,7 @@ class TestAttributionLinkingMethods(unittest.TestCase):
                 "company_id": ["C1", "C2"],
                 "Parent_Company_ID": [None, "C1"],
                 "Company Business Type": ["Parent", "Child"],
+                "companymarketchannelcode": ["CH1", "CH1"],
             }
         )
 
