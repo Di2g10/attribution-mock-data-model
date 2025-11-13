@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Dict
 
 import polars as pl
 
 from ..random_utils import make_ids
 
-__all__ = ["generate"]
+__all__ = ["ChannelField", "generate"]
+
+
+class ChannelField(StrEnum):
+    """Enumerates all output columns for the Channel generator (snake_case aligned)."""
+
+    channel_id = "channel_key"
+    channel_name = "channel_name"
+    group = "channel_group"
+    communication_mode = "communication_mode"
+    type = "channel_type"
+
 
 # --------------------------------------------------------------------------- #
 # Default vocabularies
@@ -48,16 +60,16 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # ── Build DataFrame ────────────────────────────────────────────────────
     return pl.DataFrame(
         {
-            "channel_id": make_ids(len(rows), "CHAN"),
-            "channel_name": [r["Channel Name"] for r in rows],
-            "group": [r["Group"] for r in rows],
+            ChannelField.channel_id: make_ids(len(rows), "CHAN"),
+            ChannelField.channel_name: [r["channel_name"] for r in rows],
+            ChannelField.group: [r["channel_group"] for r in rows],
             # "identifiable_method": [r["Identifiable method"] for r in lf],
-            "type": [r["Type"] for r in rows],
+            ChannelField.type: [r["type"] for r in rows],
         }
         # ── Derive the Push / Pull flag ---------------------------------------
     ).with_columns(
-        pl.when(pl.col("type").is_in(PUSH_TYPES))
+        pl.when(pl.col(ChannelField.type).is_in(PUSH_TYPES))
         .then(pl.lit("Push"))
         .otherwise(pl.lit("Pull"))
-        .alias("communication_mode")  # << NEW COLUMN
+        .alias(ChannelField.communication_mode)
     )

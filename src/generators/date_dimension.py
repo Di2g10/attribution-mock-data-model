@@ -121,11 +121,11 @@ def extract_date_components(dates: List[datetime]) -> dict[str, List[Any]]:
     return {
         "date_key": date_keys,
         "date": dates_str,
-        "financialyear": financial_year,
-        "financialmonthnumber": financial_month_number,
-        "financialquarter": financial_quarter,
-        "isholiday": isholiday,
-        "isweekend": isweekend,
+        "financial_year": financial_year,
+        "financial_month_number": financial_month_number,
+        "financial_quarter": financial_quarter,
+        "is_holiday": isholiday,
+        "is_weekend": isweekend,
     }
 
 

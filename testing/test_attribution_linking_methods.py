@@ -11,6 +11,14 @@ import unittest
 import polars as pl
 
 from src.generators.attribution_linking_table import generate as generate_links
+from src.generators.campaigns import CampaignField
+from src.generators.channels import ChannelField
+from src.generators.company import CompanyField
+from src.generators.interactions import InteractionField
+from src.generators.marketing_activity import MarketingActivityField
+from src.generators.orders import OrderField
+from src.generators.person import PersonField
+from src.generators.products import ProductField
 
 
 class TestAttributionLinkingMethods(unittest.TestCase):
@@ -21,30 +29,31 @@ class TestAttributionLinkingMethods(unittest.TestCase):
         # Companies hierarchy C2 -> C1 (C1 is parent)
         self.company_df = pl.DataFrame(
             {
-                "company_id": ["C1", "C2"],
-                "Parent_Company_ID": [None, "C1"],
-                "Company Business Type": ["Parent", "Child"],
-                "companymarketchannelcode": ["CH1", "CH1"],
+                CompanyField.company_id: ["C1", "C2"],
+                CompanyField.parent_company_id: [None, "C1"],
+                CompanyField.company_business_type: ["Parent", "Child"],
+                CompanyField.company_market_channel_code: ["CH1", "CH1"],
+                CompanyField.company_trading_unit_code: ["TRD1", "TRD1"],
             }
         )
 
         # People
         self.person_df = pl.DataFrame(
             {
-                "person_id": ["P1"],
-                "company_id": ["C2"],
+                PersonField.person_id: ["P1"],
+                PersonField.company_id: ["C2"],
             }
         )
 
         # Interactions: I1 has person P1 (at C2 company context); I2 has unknown person but company C2
         self.interactions_df = pl.DataFrame(
             {
-                "interaction_id": ["I1", "I2"],
-                "interacted_person_id": ["P1", None],
-                "interacted_company_id": ["C2", "C2"],
-                "marketing_activity_id": ["A1", "A2"],
-                "interaction_type": ["Email", "Email"],
-                "interaction_date": [
+                InteractionField.interaction_id: ["I1", "I2"],
+                InteractionField.interacted_person_id: ["P1", None],
+                InteractionField.interacted_company_id: ["C2", "C2"],
+                InteractionField.marketing_activity_id: ["A1", "A2"],
+                InteractionField.interaction_type: ["Email", "Email"],
+                InteractionField.interaction_date: [
                     __import__("datetime").datetime(2024, 1, 1),
                     __import__("datetime").datetime(2024, 1, 2),
                 ],
@@ -54,30 +63,38 @@ class TestAttributionLinkingMethods(unittest.TestCase):
         # Orders: O1 belongs to company C1 and contact is P1
         self.orders_df = pl.DataFrame(
             {
-                "order_id": ["O1"],
-                "company_id": ["C1"],
-                "person_id": ["P1"],
-                "product_id": ["PR1"],
-                "date_raised": [__import__("datetime").datetime(2024, 1, 10)],
+                OrderField.order_id: ["O1"],
+                OrderField.company_id: ["C1"],
+                OrderField.person_id: ["P1"],
+                OrderField.product_id: ["PR1"],
+                OrderField.date_raised: [__import__("datetime").datetime(2024, 1, 10)],
             }
         )
 
         # Minimal product/activity structures (empty or minimal) for enrichment path
         self.products_df = pl.DataFrame(
-            {"product_id": ["PR1"], "product_parent_id": [None], "level": ["Tier 1"]}
+            {
+                ProductField.product_id: ["PR1"],
+                ProductField.product_parent_id: [None],
+                ProductField.level: ["Tier 1"],
+            }
         )
         self.marketing_activity_df = pl.DataFrame(
             {
-                "marketing_activity_id": ["A1", "A2"],
-                "campaign_id": ["C1", "C1"],
-                "marketing_asset_id": ["A1", "A1"],
-                "targeted_company_id": [None, None],
-                "channel_id": ["CH1", "CH1"],
+                MarketingActivityField.marketing_activity_id: ["A1", "A2"],
+                MarketingActivityField.campaign_id: ["C1", "C1"],
+                MarketingActivityField.marketing_asset_id: ["A1", "A1"],
+                MarketingActivityField.targeted_company_id: [None, None],
+                MarketingActivityField.channel_id: ["CH1", "CH1"],
             }
         )
-        self.campaigns_df = pl.DataFrame({"campaign_id": ["C1"], "product_id": ["P1"]})
+        self.campaigns_df = pl.DataFrame(
+            {CampaignField.campaign_id: ["C1"], CampaignField.product_id: ["P1"]}
+        )
         self.assets_df = pl.DataFrame({"marketing_asset_id": ["A1"], "product_id": ["P2"]})
-        self.channels_df = pl.DataFrame({"channel_id": ["CH1"], "channel_name": ["Some Channel"]})
+        self.channels_df = pl.DataFrame(
+            {ChannelField.channel_id: ["CH1"], ChannelField.channel_name: ["Some Channel"]}
+        )
 
         self.prior = {
             "Company": self.company_df,

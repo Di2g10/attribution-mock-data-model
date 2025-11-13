@@ -15,7 +15,50 @@ from ..random_utils import (
     require_df,
 )
 
-__all__ = ["generate"]
+__all__ = ["CampaignField", "generate"]
+
+# src/generators/campaign_fields_enum.py
+from enum import StrEnum  # if needed: fallback to `class CampaignField(str, Enum): ...`
+
+
+class CampaignField(StrEnum):
+    """Field names for campaign data."""
+
+    campaign_id = "campaign_id"
+    campaign_name = "campaign_name"
+    dmo_monday_id = "dmo_monday_id"
+    activity_status = "activity_status"
+    marketing_lead_name = "marketing_lead_name"
+    contributer_name = "contributer_name"  # matches sheet spelling
+    campaign_planned_start_date = "campaign_planned_start_date"
+    campaign_live_date = "campaign_live_date"
+    engaged_team_name = "engaged_team_name"
+    campaign_summary = "campaign_summary"
+    engagement_stage_classification = "engagement_stage_classification"
+    activity_type = "activity_type"
+    impacted_segment_name = "impacted_segment_name"
+    campaign_theme_name = "campaign_theme_name"
+    product_area = "product_area"
+    impacted_region = "impacted_region"
+    strategic_pillar = "strategic_pillar"
+    campaign_purpose = "campaign_purpose"
+    business_vertical = "business_vertical"
+    partner_name = "partner_name"
+    agency_support_ind = "agency_support_ind"
+    agency_name = "agency_name"
+    brand_name = "brand_name"
+    estimated_outcome_gross_margin = "estimated_outcome_gross_margin"
+    estimated_outcome_sov = "estimated_outcome_sov"
+    estimated_outcome_roix1 = "estimated_outcome_roix1"
+    overall_timeline_start = "overall_timeline_start"
+    overall_timeline_end = "overall_timeline_end"
+    outcome_linear_roi_flag = "outcome_linear_roi_flag"
+    monday_record_creation_dtm = "monday_record_creation_dtm"
+    product_id = "product_id"
+    source_table = "source_table"
+    source_id_field = "source_id_field"
+    source_id = "source_id"
+
 
 # Constants for probability values
 PARTNER_PROBABILITY = 0.5
@@ -310,31 +353,38 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     return pl.DataFrame(
         {
-            "campaign_id": ids,
-            "campaign_name": campaign_names,
-            "overall_timeline_start": start_dates,
-            "overall_timeline_end": end_dates,
-            "monday_record_creation_dtm": monday_creation,
-            "objective": weighted_sample(OBJECTIVE, OBJECTIVE_WEIGHTS, n),
-            "campaign_summary": [fake.text(max_nb_chars=80) for _ in ids],
-            "brand": ["bt"] * n,
-            "marketing_lead": weighted_sample(DMO_OWNERS, n=n),
-            "partner": weighted_sample(BT_PARTNERS, BT_PARTNER_WEIGHTS, n),
-            "product_id": weighted_sample(product_ids, n=n),
-            "segment": segments,
-            "business_unit": segments,  # alias aligns to spreadsheet "businessunit"
-            # Added fields from spreadsheet
-            "campaign_planned_start_date": planned_starts,
-            "campaign_live_date": live_dates,
-            "activity_type": weighted_sample(CAMPAIGN_TYPES, CAMPAIGN_TYPE_WEIGHTS, n),
-            "activity_status": weighted_sample(CAMPAIGN_STATUS, CAMPAIGN_STATUS_WEIGHTS, n),
-            "purpose": weighted_sample(["acquisition", "retention", "upsell", "awareness"], n=n),
-            "engagement_stage_classification": weighted_sample(
+            CampaignField.campaign_id: ids,
+            CampaignField.campaign_name: campaign_names,
+            CampaignField.overall_timeline_start: start_dates,
+            CampaignField.overall_timeline_end: end_dates,
+            CampaignField.monday_record_creation_dtm: monday_creation,
+            CampaignField.campaign_summary: [fake.text(max_nb_chars=80) for _ in ids],
+            CampaignField.brand_name: ["bt"] * n,  # was "brand"
+            CampaignField.marketing_lead_name: weighted_sample(
+                DMO_OWNERS, n=n
+            ),  # was marketing_lead
+            CampaignField.partner_name: weighted_sample(
+                BT_PARTNERS, BT_PARTNER_WEIGHTS, n
+            ),  # was partner
+            CampaignField.product_id: weighted_sample(product_ids, n=n),
+            CampaignField.impacted_segment_name: segments,  # was "segment"
+            CampaignField.campaign_planned_start_date: planned_starts,
+            CampaignField.campaign_live_date: live_dates,
+            CampaignField.activity_type: weighted_sample(CAMPAIGN_TYPES, CAMPAIGN_TYPE_WEIGHTS, n),
+            CampaignField.activity_status: weighted_sample(
+                CAMPAIGN_STATUS, CAMPAIGN_STATUS_WEIGHTS, n
+            ),
+            CampaignField.campaign_purpose: weighted_sample(
+                ["acquisition", "retention", "upsell", "awareness"], n=n
+            ),  # was "purpose"
+            CampaignField.engagement_stage_classification: weighted_sample(
                 ["TOFU", "MOFU", "BOFU"], [0.4, 0.4, 0.2], n
             ),
-            "product_area": weighted_sample(BT_PRODUCTS, BT_PRODUCT_WEIGHTS, n),
-            "vertical": weighted_sample(CAMPAIGN_SITUATIONS, CAMPAIGN_SITUATION_WEIGHTS, n),
-            "agency_name": [
+            CampaignField.product_area: weighted_sample(BT_PRODUCTS, BT_PRODUCT_WEIGHTS, n),
+            CampaignField.business_vertical: weighted_sample(
+                CAMPAIGN_SITUATIONS, CAMPAIGN_SITUATION_WEIGHTS, n
+            ),  # was "vertical" earlier; choose *one* source: segments or situations
+            CampaignField.agency_name: [
                 (
                     weighted_sample(BT_PARTNERS, BT_PARTNER_WEIGHTS, 1)[0]
                     if agency_support[i]
@@ -342,24 +392,38 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 )
                 for i in range(n)
             ],
-            "agency_support_flag": agency_support,
-            "theme": weighted_sample(["launch", "promo", "brand", "retail"], n=n),
-            "strategic_pillar": weighted_sample(["growth", "retention", "efficiency"], n=n),
-            "region": weighted_sample(["UK", "EMEA", "Global"], [0.8, 0.15, 0.05], n),
-            "contributers": [fake.name() for _ in ids],
-            "team": weighted_sample(["Demand Gen", "Brand", "Product Marketing", "Field"], n=n),
-            "dmo_monday_id": [f"MON{fake.random_int(min=1000, max=999999)}" for _ in ids],
-            "outcome_linearroi_flag": weighted_sample([True, False], [0.2, 0.8], n),
-            "estimated_outcome_roi_x1": [
+            CampaignField.agency_support_ind: agency_support,  # was "agency_support_flag"
+            CampaignField.campaign_theme_name: weighted_sample(
+                ["launch", "promo", "brand", "retail"], n=n
+            ),
+            CampaignField.strategic_pillar: weighted_sample(
+                ["growth", "retention", "efficiency"], n=n
+            ),
+            CampaignField.impacted_region: weighted_sample(
+                ["UK", "EMEA", "Global"], [0.8, 0.15, 0.05], n
+            ),
+            CampaignField.contributer_name: [
+                fake.name() for _ in ids
+            ],  # was "contributers" (typo retained per sheet)
+            CampaignField.engaged_team_name: weighted_sample(
+                ["Demand Gen", "Brand", "Product Marketing", "Field"], n=n
+            ),  # was "team"
+            CampaignField.dmo_monday_id: [
+                f"MON{fake.random_int(min=1000, max=999999)}" for _ in ids
+            ],
+            CampaignField.outcome_linear_roi_flag: weighted_sample([True, False], [0.2, 0.8], n),
+            CampaignField.estimated_outcome_roix1: [
+                round(fake.random_number(digits=2, fix_len=False) / 10, 2) for _ in ids
+            ],  # was "estimated_outcome_roi_x1"
+            CampaignField.estimated_outcome_sov: [
                 round(fake.random_number(digits=2, fix_len=False) / 10, 2) for _ in ids
             ],
-            "estimated_outcome_sov": [
-                round(fake.random_number(digits=2, fix_len=False) / 10, 2) for _ in ids
+            CampaignField.estimated_outcome_gross_margin: [
+                fake.random_int(min=10, max=90) for _ in ids
             ],
-            "estimated_outcome_gross_margin": [fake.random_int(min=10, max=90) for _ in ids],
-            # Provenance fields (kept if present in spreadsheet)
-            "source_table": ["campaign_management"] * n,
-            "source_id_field": ["campaign_id"] * n,
-            "source_id": [f"cmp{i:04d}" for i in range(1, n + 1)],
+            # provenance
+            CampaignField.source_table: ["campaign_management"] * n,
+            CampaignField.source_id_field: ["campaign_id"] * n,
+            CampaignField.source_id: [f"cmp{i:04d}" for i in range(1, n + 1)],
         }
     )

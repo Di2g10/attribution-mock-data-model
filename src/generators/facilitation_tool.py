@@ -1,6 +1,7 @@
 """Contains functions to generate facilitation tool data."""
 
 from __future__ import annotations
+from enum import StrEnum
 
 from typing import Any
 
@@ -8,6 +9,15 @@ import polars as pl
 
 
 __all__ = ["generate"]
+
+
+class FacilitationToolField(StrEnum):
+    """Enumerates all output columns for the Facilitation Tool generator (snake_case aligned)."""
+
+    facilitation_tool_name = "facilitation_tool_name"
+    owner = "owner"
+    facilitation_tool_id = "facilitation_tool_id"
+    yearly_cost = "yearly_cost"
 
 
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
@@ -18,50 +28,52 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     :returns: DataFrame containing generated facilitation tool data
     """
     # Define the dataset as a list of dictionaries
-    data = [
-        {
-            "Name": "Marketo",
-            "Owner": "Alice Smith",
-            "Yearly Cost": 14400,
-            "Tool_id": "TOOL001",
-        },
-        {
-            "Name": "Sprinkler",
-            "Owner": "Bob Johnson",
-            "Yearly Cost": 10800,
-            "Tool_id": "TOOL002",
-        },
-        {
-            "Name": "Sprout",
-            "Owner": "Carla White",
-            "Yearly Cost": 8400,
-            "Tool_id": "TOOL003",
-        },
-        {
-            "Name": "ACM",
-            "Owner": "David Jones",
-            "Yearly Cost": 12000,
-            "Tool_id": "TOOL004",
-        },
-        {
-            "Name": "Eloqua",
-            "Owner": "Emma Taylor",
-            "Yearly Cost": 15000,
-            "Tool_id": "TOOL005",
-        },
-        {
-            "Name": "Dialer",
-            "Owner": "Frank Wright",
-            "Yearly Cost": 6000,
-            "Tool_id": "TOOL006",
-        },
-        {
-            "Name": "Go Inspire",
-            "Owner": "Grace Patel",
-            "Yearly Cost": 11000,
-            "Tool_id": "TOOL007",
-        },
+    names = [
+        "Marketo",
+        "Sprinkler",
+        "Sprout",
+        "ACM",
+        "Eloqua",
+        "Dialer",
+        "Go Inspire",
+    ]
+
+    owners = [
+        "Alice Smith",
+        "Bob Johnson",
+        "Carla White",
+        "David Jones",
+        "Emma Taylor",
+        "Frank Wright",
+        "Grace Patel",
+    ]
+
+    tool_ids = [
+        "TOOL001",
+        "TOOL002",
+        "TOOL003",
+        "TOOL004",
+        "TOOL005",
+        "TOOL006",
+        "TOOL007",
+    ]
+
+    yearly_costs = [
+        14400,
+        10800,
+        8400,
+        12000,
+        15000,
+        6000,
+        11000,
     ]
 
     # Create a Polars DataFrame
-    return pl.DataFrame(data)
+    return pl.DataFrame(
+        {
+            FacilitationToolField.facilitation_tool_name: names,
+            FacilitationToolField.owner: owners,
+            FacilitationToolField.facilitation_tool_id: tool_ids,
+            FacilitationToolField.yearly_cost: yearly_costs,
+        }
+    )

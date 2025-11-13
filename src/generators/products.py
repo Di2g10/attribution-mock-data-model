@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, List, Tuple
 
 import polars as pl
 
 from ..random_utils import fake, make_ids, _rng as rng, weighted_sample
 
-__all__ = ["generate"]
+__all__ = ["ProductField", "generate"]
+
+
+class ProductField(StrEnum):
+    """Enumerates all output columns for the Product generator (snake_case aligned)."""
+
+    product_id = "product_id"
+    product_parent_id = "product_parent_id"
+    name = "name"
+    level = "level"
+    source_table = "source_table"
+    source_id_field = "source_id_field"
+    source_id = "source_id"
+    renewal_rate = "renewal_rate"
+
 
 # BT product categories with weights
 BT_PRODUCT_CATEGORIES = [
@@ -159,15 +174,14 @@ def generate_level1_products(
 
     level1_df = pl.DataFrame(
         {
-            "product_id": level1_ids,
-            "product_parent_id": [""]
-            * level1_count,  # No parent for top level (empty string instead of None)
-            "name": level1_categories,
-            "level": ["Tier 1"] * level1_count,
-            "source_table": ["Product Catalog"] * level1_count,
-            "source_id_field": ["product_id"] * level1_count,
-            "source_id": [f"CAT{i:04d}" for i in range(1, level1_count + 1)],
-            "renewalrate": weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level1_count),
+            ProductField.product_id: level1_ids,
+            ProductField.product_parent_id: ["" for _ in range(level1_count)],
+            ProductField.name: level1_categories,
+            ProductField.level: ["Tier 1"] * level1_count,
+            ProductField.source_table: ["Product Catalog"] * level1_count,
+            ProductField.source_id_field: ["product_id"] * level1_count,
+            ProductField.source_id: [f"CAT{i:04d}" for i in range(1, level1_count + 1)],
+            ProductField.renewal_rate: weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level1_count),
         }
     )
 
@@ -243,14 +257,14 @@ def generate_level2_products(
 
     level2_df = pl.DataFrame(
         {
-            "product_id": level2_ids,
-            "product_parent_id": level2_parent_ids,
-            "name": level2_names,
-            "level": ["Tier 2"] * level2_count,
-            "source_table": ["Product Catalog"] * level2_count,
-            "source_id_field": ["product_id"] * level2_count,
-            "source_id": [f"SUB{i:04d}" for i in range(1, level2_count + 1)],
-            "renewalrate": weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level2_count),
+            ProductField.product_id: level2_ids,
+            ProductField.product_parent_id: level2_parent_ids,
+            ProductField.name: level2_names,
+            ProductField.level: ["Tier 2"] * level2_count,
+            ProductField.source_table: ["Product Catalog"] * level2_count,
+            ProductField.source_id_field: ["product_id"] * level2_count,
+            ProductField.source_id: [f"SUB{i:04d}" for i in range(1, level2_count + 1)],
+            ProductField.renewal_rate: weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level2_count),
         }
     )
 
@@ -326,14 +340,14 @@ def generate_level3_products(
 
     return pl.DataFrame(
         {
-            "product_id": level3_ids,
-            "product_parent_id": level3_parent_ids,
-            "name": level3_names,
-            "level": ["Tier 3"] * level3_count,
-            "source_table": ["Product Catalog"] * level3_count,
-            "source_id_field": ["product_id"] * level3_count,
-            "source_id": [f"PROD{i:04d}" for i in range(1, level3_count + 1)],
-            "renewalrate": weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level3_count),
+            ProductField.product_id: level3_ids,
+            ProductField.product_parent_id: level3_parent_ids,
+            ProductField.name: level3_names,
+            ProductField.level: ["Tier 3"] * level3_count,
+            ProductField.source_table: ["Product Catalog"] * level3_count,
+            ProductField.source_id_field: ["product_id"] * level3_count,
+            ProductField.source_id: [f"PROD{i:04d}" for i in range(1, level3_count + 1)],
+            ProductField.renewal_rate: weighted_sample([0.9, 0.8, 0.7, 0.6, 0.5], n=level3_count),
         }
     )
 

@@ -312,7 +312,7 @@ def _reorder_columns(object_name: str, df: pl.DataFrame) -> pl.DataFrame:
 
     def is_date(c: str) -> bool:
         cl = c.lower()
-        return "date" in cl or cl in {"interactiondate", "outcomedate"}
+        return "date" in cl or cl in {"interactiondate", "outcome_date"}
 
     # Partition columns preserving original order
     pk_cols: list[str | None] = [pk] if pk in cols else []

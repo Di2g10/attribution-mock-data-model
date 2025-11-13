@@ -7,6 +7,10 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import polars as pl
 
+from .channels import ChannelField
+from .company import CompanyField
+from .marketing_activity import MarketingActivityField
+from .person import PersonField
 from ..random_utils import (
     fake,
     generate_mapped_values,
@@ -15,9 +19,10 @@ from ..random_utils import (
     weighted_sample,
     require_df,
 )
+from ..validation import extract_id_column
 
 __all__ = [
-    "create_interactions_dataframe",
+    "InteractionField",
     "generate",
     "generate_basic_data",
     "generate_channels",
@@ -25,7 +30,28 @@ __all__ = [
     "get_channel_data_from_registry",
 ]
 
-from ..validation import extract_id_column
+# src/generators/interaction_fields_enum.py
+from enum import StrEnum
+
+
+class InteractionField(StrEnum):
+    """Enum for interaction fields."""
+
+    interaction_id = "interaction_id"
+    identification_method_type = "identification_method_type"
+    channel_name = "channel_name"
+    interaction_type = "interaction_type"
+    data_source_name = "data_source_name"
+    interacted_person_id = "interacted_person_id"
+    interacted_company_id = "interacted_company_id"
+    marketing_activity_id = "marketing_activity_id"
+    interaction_date = "interaction_date"
+    interaction_dur = "interaction_dur"
+    follow_from_interaction_id = "follow_from_interaction_id"
+    source_table = "source_table"
+    source_id = "source_id"
+    source_id_field = "source_id_field"
+
 
 # Default weights for channels (higher weight = more common)
 DEFAULT_CHANNEL_WEIGHTS = {
@@ -294,57 +320,6 @@ def _generate_company_data(
     return company_interacted
 
 
-def create_interactions_dataframe(data: InteractionData) -> pl.DataFrame:
-    """Create a DataFrame with all interaction fields.
-
-    :param data: Container with all interaction data parameters
-    :returns: DataFrame containing all interaction data
-    """
-    # Generate person and activity data
-    person_interacted = _generate_person_data(data)
-    activity = _generate_activity_data(data)
-
-    # Generate follow-up interactions
-    followfrom_interactions, interaction_to_person = _generate_followup_data(
-        data, person_interacted
-    )
-
-    # Generate company data
-    company_interacted = _generate_company_data(
-        data, person_interacted, followfrom_interactions, interaction_to_person
-    )
-
-    return pl.DataFrame(
-        {
-            "interaction_id": data.ids,
-            "identification_method_type": weighted_sample(
-                [
-                    "Known From outbound Communication",
-                    "Self Identification",
-                    "Cookie match",
-                    "IP Company Match",
-                    None,
-                ],
-                [0.3, 0.3, 0.2, 0.1, 0.1],
-                data.n,
-            ),
-            "channel": data.channels,
-            "interaction_type": data.interaction_types,
-            "data_source_name": weighted_sample(
-                ["CRM", "Marketing Automation", "Web Analytics", "Social Media", "Survey"],
-                [0.3, 0.2, 0.2, 0.2, 0.1],
-                data.n,
-            ),
-            "interacted Person ID": person_interacted,
-            "interacted Company ID": company_interacted,
-            "marketing_activity_id": activity,
-            "interaction_date": data.interaction_dates,
-            "interaction_dur": data.durations,
-            "follow_from_interaction_id": followfrom_interactions,
-        }
-    )
-
-
 def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     """Generate a high-performance DataFrame of interaction data using vectorised logic.
 
@@ -360,36 +335,46 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     marketing_activity_df = require_df(prior.get("Marketing Activity"), "Marketing Activity")
     person_df = require_df(prior.get("Person"), "Person")
     channel_df = require_df(prior.get("Channels"), "Channels")
-    if not {"person_id", "company_id"}.issubset(person_df.columns):
+    if not {PersonField.person_id, PersonField.company_id}.issubset(person_df.columns):
         raise ValueError(
-            "Missing the required person/company columns ['person_id', 'company_id'] in Person data."
+            f"Missing the required person/company columns [{PersonField.person_id}, {PersonField.company_id}] in Person data."
         )
 
     if marketing_activity_df is None or not {
-        "marketing_activity_id",
-        "targeted_person_id",
-        "targeted_company_id",
+        MarketingActivityField.marketing_activity_id,
+        MarketingActivityField.targeted_person_id,
+        MarketingActivityField.targeted_company_id,
     }.issubset(marketing_activity_df.columns):
         raise ValueError("No activity data with valid person/company references found.")
 
-    person_ids = extract_id_column(person_df, "person_id")
+    person_ids = extract_id_column(person_df, PersonField.person_id)
     fallback_series = pl.Series(
         "random_person_id",
         weighted_sample(person_ids, n=marketing_activity_df.height),
     )
     activities_df = (
-        marketing_activity_df.join(channel_df, on="channel_id", how="inner", validate="m:1")
+        marketing_activity_df.join(
+            channel_df,
+            left_on=MarketingActivityField.channel_id,
+            right_on=ChannelField.channel_id,
+            how="inner",
+            validate="m:1",
+        )
         .with_columns(fallback_series)
         .select(
             [
-                pl.col("marketing_activity_id").alias("marketing_activity_id"),
+                pl.col(MarketingActivityField.marketing_activity_id).alias(
+                    InteractionField.marketing_activity_id
+                ),
                 pl.coalesce(
-                    pl.col("targeted_person_id"),
+                    pl.col(MarketingActivityField.targeted_person_id),
                     pl.col("random_person_id"),
                     pl.col("random_person_id"),
-                ).alias("interacted_person_id"),
-                pl.col("targeted_company_id").alias("interacted_company_id"),
-                pl.col("channel_name").alias("channel_name"),
+                ).alias(InteractionField.interacted_person_id),
+                pl.col(MarketingActivityField.targeted_company_id).alias(
+                    InteractionField.interacted_company_id
+                ),
+                pl.col(ChannelField.channel_name).alias(InteractionField.channel_name),
             ]
         )
     )
@@ -400,21 +385,21 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     person_company_map = (
         person_df.select(
             [
-                pl.col("person_id").alias("interacted_person_id"),
-                pl.col("company_id").alias("_person_company_id"),
+                pl.col(PersonField.person_id).alias(InteractionField.interacted_person_id),
+                pl.col(PersonField.company_id).alias("_person_company_id"),
             ]
         )
         .unique()
-        .group_by("interacted_person_id")
+        .group_by(InteractionField.interacted_person_id)
         .agg(pl.first("_person_company_id").alias("_person_company_id"))
     )
 
     activities_df = (
-        activities_df.join(person_company_map, on="interacted_person_id", how="left")
+        activities_df.join(person_company_map, on=InteractionField.interacted_person_id, how="left")
         .with_columns(
-            pl.coalesce([pl.col("_person_company_id"), pl.col("interacted_company_id")]).alias(
-                "interacted_company_id"
-            )
+            pl.coalesce(
+                [pl.col("_person_company_id"), pl.col(InteractionField.interacted_company_id)]
+            ).alias(InteractionField.interacted_company_id)
         )
         .drop("_person_company_id")
     )
@@ -423,9 +408,11 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     interaction_ids = make_ids(n, "INT")
     sampled_df = activities_df.sample(n=n, with_replacement=True).with_columns(
         [
-            pl.Series("interaction_id", interaction_ids),
-            pl.Series("interaction_date", [random_date() for _ in range(n)]),
-            pl.Series("interaction_dur", [fake.random_int(1, 120) for _ in range(n)]),
+            pl.Series(InteractionField.interaction_id, interaction_ids),
+            pl.Series(InteractionField.interaction_date, [random_date() for _ in range(n)]),
+            pl.Series(
+                InteractionField.interaction_dur, [fake.random_int(1, 120) for _ in range(n)]
+            ),
         ]
     )
 
@@ -434,7 +421,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     last_seen_by_person: dict[str, str] = {}
     follow_on_likelihood = 0.2
     for i in range(n):
-        raw_person = sampled_df[i, "interacted_person_id"]
+        raw_person = sampled_df[i, InteractionField.interacted_person_id]
         person: Optional[str] = raw_person if isinstance(raw_person, str) else None
         if (
             person is not None
@@ -443,10 +430,10 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         ):
             followfrom[i] = last_seen_by_person[person]
         if person is not None:
-            last_seen_by_person[person] = sampled_df[i, "interaction_id"]
+            last_seen_by_person[person] = sampled_df[i, InteractionField.interaction_id]
 
     sampled_df = sampled_df.with_columns(
-        pl.Series("follow_from_interaction_id", followfrom),
+        pl.Series(InteractionField.follow_from_interaction_id, followfrom),
     )
 
     # --- 5. Add remaining columns (channel, type, metadata) ---
@@ -454,14 +441,14 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     sampled_df = sampled_df.with_columns(
         [
-            pl.col("channel_name").alias("channel_name"),
-            pl.col("channel_name")
+            pl.col(ChannelField.channel_name).alias(InteractionField.channel_name),
+            pl.col(ChannelField.channel_name)
             .replace_strict(channel_map, default=["Error"])
             .list.sample(n=1)
             .list.first()
-            .alias("interaction_type"),
+            .alias(InteractionField.interaction_type),
             pl.Series(
-                "identification_method_type",
+                InteractionField.identification_method_type,
                 weighted_sample(
                     [
                         "Known From outbound Communication",
@@ -475,7 +462,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
                 ),
             ),
             pl.Series(
-                "data_source_name",
+                InteractionField.data_source_name,
                 weighted_sample(
                     ["CRM", "Marketing Automation", "Web Analytics", "Social Media", "Survey"],
                     [0.3, 0.2, 0.2, 0.2, 0.1],
@@ -486,16 +473,18 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     )
 
     # get if sample df interaction type is error and return the channel that caused the error.
-    error_rows = sampled_df.filter(pl.col("interaction_type") == "Error")
+    error_rows = sampled_df.filter(pl.col(InteractionField.interaction_type) == "Error")
     if not error_rows.is_empty():
-        error_channels = set(error_rows.get_column("channel_name").to_list())
+        error_channels = set(error_rows.get_column(InteractionField.channel_name).to_list())
         raise ValueError(f"Error in interaction type from channel mapping:{error_channels}")
 
     # For IP-based identification, person may be unknown while company is known.
     # Force interacted_person_id to None in those cases to enable company-only linkage downstream.
     refs = (
         sampled_df.select(
-            pl.col("follow_from_interaction_id").cast(pl.Utf8).alias("interaction_id")
+            pl.col(InteractionField.follow_from_interaction_id)
+            .cast(pl.Utf8)
+            .alias(InteractionField.interaction_id)
         )
         .drop_nulls()
         .unique()
@@ -504,7 +493,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     sampled_df = (
         sampled_df.join(
             refs.with_columns(pl.lit(True).alias("_is_referenced_flag")),
-            on="interaction_id",
+            on=InteractionField.interaction_id,
             how="left",
         )
         .with_columns(pl.col("_is_referenced_flag").fill_null(False).alias("_is_referenced"))
@@ -513,20 +502,20 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     sampled_df = sampled_df.with_columns(
         pl.when(
-            (pl.col("identification_method_type") == "IP Company Match")
-            & pl.col("follow_from_interaction_id").is_null()
+            (pl.col(InteractionField.identification_method_type) == "IP Company Match")
+            & pl.col(InteractionField.follow_from_interaction_id).is_null()
             & (~pl.col("_is_referenced"))
-            & pl.col("interacted_company_id").is_null()
+            & pl.col(InteractionField.interacted_company_id).is_null()
         )
         .then(pl.lit(None))
-        .otherwise(pl.col("interacted_person_id"))
-        .alias("interacted_person_id")
+        .otherwise(pl.col(InteractionField.interacted_person_id))
+        .alias(InteractionField.interacted_person_id)
     ).drop("_is_referenced")
 
     # Ensure interacted_company_id is populated for IP Company Match lf
     # If role/targeted company did not supply a company, fill from the Company table.
     try:
-        company_ids_list = extract_id_column(prior.get("Company"), "company_id")
+        company_ids_list = extract_id_column(prior.get("Company"), CompanyField.company_id)
     except Exception:
         company_ids_list = []
 
@@ -537,11 +526,11 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
         sampled_df = sampled_df.with_columns(
             pl.when(
                 (pl.col("identification_method_type") == "IP Company Match")
-                & pl.col("interacted_company_id").is_null()
+                & pl.col(InteractionField.interacted_company_id).is_null()
             )
             .then(pl.col("_ip_fill_company"))
-            .otherwise(pl.col("interacted_company_id"))
-            .alias("interacted_company_id")
+            .otherwise(pl.col(InteractionField.interacted_company_id))
+            .alias(InteractionField.interacted_company_id)
         ).drop("_ip_fill_company")
 
     # Add source fields and align names to spreadsheet expectations
@@ -558,12 +547,13 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     )
     sampled_df = sampled_df.with_columns(
         [
-            pl.Series("sourcetable", source_tables),
+            pl.Series(InteractionField.source_table, source_tables),
             pl.Series(
-                "sourceid", [f"SRC-{fake.random_int(min=100000, max=999999)}" for _ in range(n)]
+                InteractionField.source_id,
+                [f"SRC-{fake.random_int(min=100000, max=999999)}" for _ in range(n)],
             ),
             pl.Series(
-                "sourceidfield",
+                InteractionField.source_id_field,
                 weighted_sample(
                     [
                         "Salesforce TaskId",
@@ -582,11 +572,11 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     # Ensure duration type is integer
     sampled_df = sampled_df.with_columns(
         [
-            pl.col("interaction_dur").cast(pl.Int64, strict=False),
+            pl.col(InteractionField.interaction_dur).cast(pl.Int64, strict=False),
         ]
     )
 
     # Optionally drop channel column to maintain prior behaviour
     if kwargs.get("keep_channel", False):
         return sampled_df
-    return sampled_df.drop("channel_name")
+    return sampled_df.drop(InteractionField.channel_name)

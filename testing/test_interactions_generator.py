@@ -6,10 +6,15 @@ from typing import Dict
 
 import polars as pl
 
+from src.generators.channels import ChannelField
+from src.generators.company import CompanyField
 from src.generators.interactions import (
     generate as generate_interactions,
+    InteractionField,
 )
 from src.config_loader import Config
+from src.generators.marketing_activity import MarketingActivityField
+from src.generators.person import PersonField
 from src.schema_registry import SchemaRegistry
 
 # Constants for test sample sizes
@@ -22,32 +27,31 @@ def minimal_prior_with_activities() -> Dict[str, pl.DataFrame]:
     """Create minimal valid prior data for interactions with person/company and activity links."""
     company_df = pl.DataFrame(
         {
-            "company_id": ["CO0000001", "CO0000002"],
-            "company_name": ["Company A", "Company B"],
+            CompanyField.company_id: ["CO0000001", "CO0000002"],
+            CompanyField.company_name: ["Company A", "Company B"],
         }
     )
 
     person_df = pl.DataFrame(
         {
-            "person_id": ["PER0000001", "PER0000002"],
-            "first_name": ["John", "Jane"],
-            "company_id": ["CO0000001", "CO0000002"],
+            PersonField.person_id: ["PER0000001", "PER0000002"],
+            PersonField.company_id: ["CO0000001", "CO0000002"],
         }
     )
 
     activity_df = pl.DataFrame(
         {
-            "marketing_activity_id": ["ACT0000001", "ACT0000002"],
-            "targeted_person_id": ["PER0000001", "PER0000002"],
-            "targeted_company_id": ["CO0000001", "CO0000002"],
-            "channel_id": ["CHAN0000001", "CHAN0000002"],
+            MarketingActivityField.marketing_activity_id: ["ACT0000001", "ACT0000002"],
+            MarketingActivityField.targeted_person_id: ["PER0000001", "PER0000002"],
+            MarketingActivityField.targeted_company_id: ["CO0000001", "CO0000002"],
+            MarketingActivityField.channel_id: ["CHAN0000001", "CHAN0000002"],
         }
     )
 
     channels_df = pl.DataFrame(
         {
-            "channel_id": ["CHAN0000001", "CHAN0000002", "CHAN0000003"],
-            "channel_name": ["Social Outbound Messages", "Email", "Direct Mail"],
+            ChannelField.channel_id: ["CHAN0000001", "CHAN0000002", "CHAN0000003"],
+            ChannelField.channel_name: ["Social Outbound Messages", "Email", "Direct Mail"],
         }
     )
 
@@ -73,7 +77,7 @@ def test_interactions_unique_ids() -> None:
     df = generate_interactions(
         LARGE_SAMPLE_SIZE, prior=minimal_prior_with_activities(), registry=get_registry()
     )
-    ids = df.select("interaction_id").to_series()
+    ids = df.select(InteractionField.interaction_id).to_series()
     assert ids.is_unique().all(), "interaction_id values should be unique"
     assert df.height == LARGE_SAMPLE_SIZE
 
@@ -86,47 +90,56 @@ def test_interactions_with_related_objects() -> None:
     df = generate_interactions(LARGE_SAMPLE_SIZE, prior=prior, registry=registry, keep_channel=True)
 
     assert df.height == LARGE_SAMPLE_SIZE
-    assert "interaction_id" in df.columns
+    assert InteractionField.interaction_id in df.columns
 
     # --- Test 1: Company IDs are valid ---
-    company_ids = set(prior["Company"]["company_id"].to_list())
-    company_interacted = set(df["interacted_company_id"].drop_nulls().to_list())
+    company_ids = set(prior["Company"][CompanyField.company_id].to_list())
+    company_interacted = set(df[InteractionField.interacted_company_id].drop_nulls().to_list())
     assert company_interacted.issubset(
         company_ids
     ), f"Unexpected company IDs: {company_interacted - company_ids}"
 
     # --- Test 2: Person IDs are valid ---
-    person_ids = set(prior["Person"]["person_id"].to_list())
-    person_interacted = set(df["interacted_person_id"].drop_nulls().to_list())
+    person_ids = set(prior["Person"][PersonField.person_id].to_list())
+    person_interacted = set(df[InteractionField.interacted_person_id].drop_nulls().to_list())
     assert person_interacted.issubset(
         person_ids
     ), f"Unexpected person IDs: {person_interacted - person_ids}"
 
     # --- Test 3: Activity IDs are valid ---
-    activity_ids = set(prior["Marketing Activity"]["marketing_activity_id"].to_list())
-    activities = set(df["marketing_activity_id"].drop_nulls().to_list())
+    activity_ids = set(
+        prior["Marketing Activity"][MarketingActivityField.marketing_activity_id].to_list()
+    )
+    activities = set(df[MarketingActivityField.marketing_activity_id].drop_nulls().to_list())
     assert activities.issubset(
         activity_ids
     ), f"Unexpected activity IDs: {activities - activity_ids}"
 
     # --- Test 4: Follow-up interactions share the same person as their reference ---
-    follow_ups = df.filter(pl.col("follow_from_interaction_id").is_not_null())
+    follow_ups = df.filter(pl.col(InteractionField.follow_from_interaction_id).is_not_null())
     if follow_ups.height > 0:
-        lookup = df.select(["interaction_id", "interacted_person_id"]).to_dict(as_series=False)
-        id_to_person = dict(zip(lookup["interaction_id"], lookup["interacted_person_id"]))
+        lookup = df.select(
+            [InteractionField.interaction_id, InteractionField.interacted_person_id]
+        ).to_dict(as_series=False)
+        id_to_person = dict(
+            zip(
+                lookup[InteractionField.interaction_id],
+                lookup[InteractionField.interacted_person_id],
+            )
+        )
 
         for row in follow_ups.iter_rows(named=True):
-            follow_from_id = row["follow_from_interaction_id"]
-            person_id = row["interacted_person_id"]
+            follow_from_id = row[InteractionField.follow_from_interaction_id]
+            person_id = row[InteractionField.interacted_person_id]
             assert person_id == id_to_person.get(
                 follow_from_id
-            ), f"Follow-up person mismatch: {row['interaction_id']} vs {follow_from_id}"
+            ), f"Follow-up person mismatch: {row[InteractionField.interaction_id]} vs {follow_from_id}"
 
     # --- Test 5: Each person always maps to the same company (if company exists) ---
     person_to_company: dict[str, str] = {}
     for row in df.iter_rows(named=True):
-        person_id = row["interacted_person_id"]
-        company_id = row["interacted_company_id"]
+        person_id = row[InteractionField.interacted_person_id]
+        company_id = row[InteractionField.interacted_company_id]
 
         if company_id is not None:
             if person_id in person_to_company:
@@ -139,20 +152,39 @@ def test_interactions_with_related_objects() -> None:
     # --- Test 6: Interactions match the person/company on the related activity ---
     activity_df = prior["Marketing Activity"].select(
         [
-            pl.col("marketing_activity_id").alias("marketing_activity_id"),
-            pl.col("targeted_person_id").alias("expected_person_id"),
-            pl.col("targeted_company_id").alias("expected_company_id"),
+            pl.col(MarketingActivityField.marketing_activity_id),
+            pl.col(MarketingActivityField.targeted_person_id),
+            pl.col(MarketingActivityField.targeted_company_id),
         ]
     )
-    merged = df.join(activity_df, on="marketing_activity_id", how="inner")
+    merged = df.join(
+        activity_df,
+        left_on=InteractionField.marketing_activity_id,
+        right_on=MarketingActivityField.marketing_activity_id,
+        how="inner",
+    )
 
     mismatched = merged.filter(
-        (pl.col("interacted_person_id") != pl.col("expected_person_id"))
-        | (pl.col("interacted_company_id") != pl.col("expected_company_id"))
+        (
+            pl.col(InteractionField.interacted_person_id)
+            != pl.col(MarketingActivityField.targeted_person_id)
+        )
+        | (
+            pl.col(InteractionField.interacted_company_id)
+            != pl.col(MarketingActivityField.targeted_company_id)
+        )
     )
+    field_list = [
+        InteractionField.interaction_id,
+        InteractionField.marketing_activity_id,
+        InteractionField.interacted_person_id,
+        "expected_person_id",
+        InteractionField.interacted_company_id,
+        "expected_company_id",
+    ]
     assert mismatched.is_empty(), (
         f"Some interactions do not match their activity's person/company:\n"
-        f"{mismatched.select(['interaction_id', 'marketing_activity_id', 'interacted_person_id', 'expected_person_id', 'interacted_company_id', 'expected_company_id'])}"
+        f"{mismatched.select(field_list)}"
     )
 
 
@@ -230,18 +262,8 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
             keep_channel=True,
         )
 
-        # Basic shape/columns
-        self.assertIn(
-            "channel_name", df.columns, "Generated interactions should have a 'channel' field"
-        )
-        self.assertIn(
-            "interaction_type",
-            df.columns,
-            "Generated interactions should have an 'interaction_type' field",
-        )
-
         # Channels must be known
-        for channel in df["channel_name"].to_list():
+        for channel in df[InteractionField.channel_name].to_list():
             self.assertIn(
                 channel,
                 self.channel_to_interaction_types.keys(),
@@ -250,8 +272,8 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
 
         # Types must be valid for the channel
         for row in df.iter_rows(named=True):
-            channel = row["channel_name"]
-            interaction_type = row["interaction_type"]
+            channel = row[InteractionField.channel_name]
+            interaction_type = row[InteractionField.interaction_type]
             valid_types = self.channel_to_interaction_types.get(channel, [])
             self.assertIn(
                 interaction_type,
@@ -277,18 +299,29 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
         # Prepare expected targets from the Push Activity prior
         activity_df = self.prior["Marketing Activity"].select(
             [
-                pl.col("marketing_activity_id").alias("marketing_activity_id"),
-                pl.col("targeted_person_id").alias("expected_person_id"),
-                pl.col("targeted_company_id").alias("expected_company_id"),
+                pl.col(MarketingActivityField.marketing_activity_id),
+                pl.col(MarketingActivityField.targeted_person_id),
+                pl.col(MarketingActivityField.targeted_company_id),
             ]
         )
 
         # Join to compare actual vs expected
-        merged = df.join(activity_df, on="marketing_activity_id", how="inner")
+        merged = df.join(
+            activity_df,
+            left_on=InteractionField.marketing_activity_id,
+            right_on=MarketingActivityField.marketing_activity_id,
+            how="inner",
+        )
 
         mismatched = merged.filter(
-            (pl.col("interacted_person_id") != pl.col("expected_person_id"))
-            | (pl.col("interacted_company_id") != pl.col("expected_company_id"))
+            (
+                pl.col(InteractionField.interacted_person_id)
+                != pl.col(MarketingActivityField.targeted_person_id)
+            )
+            | (
+                pl.col(InteractionField.interacted_company_id)
+                != pl.col(MarketingActivityField.targeted_company_id)
+            )
         )
 
         # If any mismatches, surface a concise diff to aid debugging
@@ -297,12 +330,12 @@ class TestInteractionsWithDesignFile(unittest.TestCase):
             msg=str(
                 mismatched.select(
                     [
-                        "interaction_id",
-                        "marketing_activity_id",
-                        "interacted_person_id",
-                        "expected_person_id",
-                        "interacted_company_id",
-                        "expected_company_id",
+                        InteractionField.interaction_id,
+                        InteractionField.marketing_activity_id,
+                        InteractionField.interacted_person_id,
+                        MarketingActivityField.targeted_person_id,
+                        InteractionField.interacted_company_id,
+                        MarketingActivityField.targeted_company_id,
                     ]
                 )
             ),

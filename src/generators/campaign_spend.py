@@ -26,6 +26,9 @@ from typing import Any, Sequence, List
 
 import polars as pl
 
+from .campaigns import CampaignField
+from .channels import ChannelField
+from .products import ProductField
 from ..random_utils import (
     fake,
     make_ids,
@@ -247,9 +250,9 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
     products_df = require_df(prior.get("Products"), "Products")
     channels_df = require_df(prior.get("Channels"), "Channels")
 
-    campaign_ids = extract_id_column(campaigns_df, "campaign_id")
-    product_ids = extract_id_column(products_df, "product_id")
-    channel_ids = extract_id_column(channels_df, "channel_id")
+    campaign_ids = extract_id_column(campaigns_df, CampaignField.campaign_id)
+    product_ids = extract_id_column(products_df, ProductField.product_id)
+    channel_ids = extract_id_column(channels_df, ChannelField.channel_id)
 
     ids = make_ids(n, "CSP")
 

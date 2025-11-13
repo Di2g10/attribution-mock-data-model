@@ -10,7 +10,8 @@ from typing import Dict
 
 import polars as pl
 
-from src.generators.interactions import generate as generate_interactions
+from src.generators.company import CompanyField
+from src.generators.interactions import generate as generate_interactions, InteractionField
 from testing.test_interactions_generator import get_registry
 
 
@@ -22,8 +23,8 @@ def create_prior() -> Dict[str, pl.DataFrame]:
     """
     company_df = pl.DataFrame(
         {
-            "company_id": ["CO0000101", "CO0000102"],
-            "company_name": ["Role Co", "Activity Co"],
+            CompanyField.company_id: ["CO0000101", "CO0000102"],
+            CompanyField.company_name: ["Role Co", "Activity Co"],
         }
     )
 
@@ -69,11 +70,13 @@ def test_role_priority_over_targeted_company() -> None:
     df = generate_interactions(20, prior=prior, registry=get_registry(), keep_channel=True)
 
     # All df for this person should point to the role company CO0000101
-    rows = df.filter(pl.col("interacted_person_id") == "PER0100001")
+    rows = df.filter(pl.col(InteractionField.interacted_person_id) == "PER0100001")
     assert not rows.is_empty(), "Expected generated interactions for the test person"
-    assert rows.select(pl.col("interacted_company_id").unique()).to_series().to_list() == [
+    assert rows.select(
+        pl.col(InteractionField.interacted_company_id).unique()
+    ).to_series().to_list() == [
         "CO0000101"
-    ], "interacted_company_id should be derived from Person Company when available"
+    ], f"{InteractionField.interacted_company_id} should be derived from Person Company when available"
 
 
 def test_role_fills_when_targeted_company_null() -> None:
@@ -81,10 +84,12 @@ def test_role_fills_when_targeted_company_null() -> None:
     prior = create_prior()
     df = generate_interactions(10, prior=prior, registry=get_registry(), keep_channel=False)
 
-    rows = df.filter(pl.col("marketing_activity_id") == "ACT0100002")
+    rows = df.filter(pl.col(InteractionField.marketing_activity_id) == "ACT0100002")
     assert not rows.is_empty(), "Expected interactions from the activity with null company"
     # All such lf should use the role company
-    assert rows.select(pl.col("interacted_company_id").unique()).to_series().to_list() == [
+    assert rows.select(
+        pl.col(InteractionField.interacted_company_id).unique()
+    ).to_series().to_list() == [
         "CO0000101"
     ], "Null targeted_company_id should be filled from Person Company Role"
 

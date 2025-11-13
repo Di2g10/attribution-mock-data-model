@@ -16,7 +16,7 @@ from ..random_utils import (
     weighted_sample,
 )
 
-__all__ = ["generate"]
+__all__ = ["CompanyField", "generate"]
 
 from enum import StrEnum
 
@@ -27,7 +27,7 @@ class CompanyField(StrEnum):
     company_id = "company_id"
     parent_company_id = "parent_company_id"
     company_business_type = "company_business_type"
-    company_business_start_year_number = "company_business_start_year_number"
+    company_business_start_year_number = "company_business_start_year_value"
     company_number_of_sites_count = "company_number_of_sites_count"
     company_trading_status = "company_trading_status"
     company_territory_name = "company_territory_name"
@@ -38,7 +38,7 @@ class CompanyField(StrEnum):
     company_active_ind = "company_active_ind"
     soho_marketing_cohort_code = "soho_marketing_cohort_code"
     soho_marketing_promotion_code = "soho_marketing_promotion_code"
-    deleted_flag = "deleted_flag"
+    deleted_flag = "deleted_flag_ind"
     company_status = "company_status"
     billing_country_name = "billing_country_name"
     billing_street_name = "billing_street_name"
@@ -53,17 +53,17 @@ class CompanyField(StrEnum):
     website_name = "website_name"
     company_name = "company_name"
     company_market_channel_code = "company_market_channel_code"
-    source_id = "source_id"
+    source_id = "company_source_field_value"
     billing_city_name = "billing_city_name"
     employees_count = "employees_count"
     company_trading_unit_code = "company_trading_unit_code"
-    source_id_field = "source_id_field"
+    source_id_field = "company_source_id_field_name"
     company_old_trading_unit_code = "company_old_trading_unit_code"
-    company_death_reason_desc = "company_death_reason_desc"
+    company_death_reason_desc = "company_death_reason_value"
     company_aic_code = "company_aic_code"
     industry_name = "industry_name"
     sales_account_id = "sales_account_id"
-    source_table = "source_table"
+    source_table = "company_source_table_name"
     soho_month_cohort_code = "soho_month_cohort_code"
     ee_customer_ind = "ee_customer_ind"
 

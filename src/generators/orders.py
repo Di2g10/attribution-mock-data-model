@@ -10,8 +10,70 @@ from datetime import datetime, timedelta
 import polars as pl
 
 from ..random_utils import fake, make_ids, random_date, weighted_sample, require_df
+from .company import CompanyField
+from .interactions import InteractionField
+from .products import ProductField
 
-__all__ = ["generate"]
+__all__ = ["OrderField", "generate"]
+
+from enum import StrEnum
+
+
+class OrderField(StrEnum):
+    """Enumerates output column names for Orders in snake_case.
+
+    The generator will emit a rich set of fields, but when invoked via the
+    orchestrator (registry present) it aligns to the spreadsheet's Attributes
+    for the object "Orders" (adds missing as nulls, drops extras, and orders
+    columns to match).
+
+    :returns: String constants usable across tests and code.
+    """
+
+    # core identifiers
+    order_id = "order_id"
+    name = "name"
+    company_id = "company_id"
+    person_id = "person_id"
+    product_id = "product_id"
+
+    # dates
+    date_raised = "date_raised"
+    date_completed = "date_completed"
+    outcome_date = "outcome_date"
+    ceased_date = "ceased_date"
+    transaction_date = "transaction_date"
+
+    # commercials
+    sales_order_value = "sales_order_value"
+    sales_order_value_gross_margin = "sales_order_value_gross_margin"
+    initial_contract_value = "initial_contract_value"
+    initial_contract_value_gross_margin = "initial_contract_value_gross_margin"
+    average_revenue_per_unit = "average_revenue_per_unit"
+    contract_term = "contract_term"
+
+    # product related
+    product_price_type = "product_price_type"
+    product_quantity = "product_quantity"
+
+    # actions/reasons
+    action_type = "action_type"
+    cancel_reason = "cancel_reason"
+    cessetion_reason_group = "cessetion_reason_group"
+    cessetion_reason_subgroup = "cessetion_reason_sub_group"
+
+    # lineage/relationships
+    previous_order_id = "previous_order_id"
+    related_opportunity_id = "related_opportunity_id"
+    causal_interaction_id = "causal_interaction_id"
+
+    # provenance
+    source_table = "source_table"
+    source_id = "source_id"
+    source_id_field = "source_id_field"
+
+    # misc derived
+    sales_channel = "sales_channel"
 
 
 @dataclass
@@ -236,12 +298,12 @@ def _create_company_person_map(
     # If we have interactions, link interacted person/company
     if (
         interaction_df is not None
-        and "interacted_company_id" in interaction_df.columns
-        and "interacted_person_id" in interaction_df.columns
+        and InteractionField.interacted_company_id in interaction_df.columns
+        and InteractionField.interacted_person_id in interaction_df.columns
     ):
         for row in interaction_df.iter_rows(named=True):
-            cid = row.get("interacted_company_id")
-            pid = row.get("interacted_person_id")
+            cid = row.get(InteractionField.interacted_company_id)
+            pid = row.get(InteractionField.interacted_person_id)
             if cid and pid:
                 company_person_map.setdefault(cid, [])
                 if pid not in company_person_map[cid]:
@@ -324,8 +386,8 @@ def _create_company_person_relationships(
     company_ids: List[str] = []
     person_ids: List[str] = []
 
-    if company_df is not None and "company_id" in company_df.columns:
-        company_ids = company_df["company_id"].to_list()
+    if company_df is not None and CompanyField.company_id in company_df.columns:
+        company_ids = company_df[CompanyField.company_id].to_list()
     if person_df is not None and "person_id" in person_df.columns:
         person_ids = person_df["person_id"].to_list()
 
@@ -360,17 +422,21 @@ def _process_interaction_data(
     company_interactions_map: Dict[str, List[str]] = {}
     interaction_dates_map: Dict[str, datetime] = {}
 
-    if interaction_df is not None and "interaction_id" in interaction_df.columns:
+    if interaction_df is not None and InteractionField.interaction_id in interaction_df.columns:
         # robustly pick a date column
         date_col = (
             "date"
             if "date" in interaction_df.columns
-            else ("interaction_date" if "interaction_date" in interaction_df.columns else None)
+            else (
+                InteractionField.interaction_date
+                if InteractionField.interaction_date in interaction_df.columns
+                else None
+            )
         )
         if date_col is not None:
             for row in interaction_df.iter_rows(named=True):
-                iid = row.get("interaction_id")
-                cid = row.get("interacted_company_id")
+                iid = row.get(InteractionField.interaction_id)
+                cid = row.get(InteractionField.interacted_company_id)
                 d = row.get(date_col)
                 if iid and d:
                     interaction_dates_map[iid] = d
@@ -401,51 +467,57 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
 
     df = pl.DataFrame(
         {
-            "order_id": data.ids,
-            "name": [f"Order {i}" for i in data.ids],
-            "company_id": data.order_companies,
-            "product_id": weighted_sample(product_ids, n=data.n),
-            "product_price_type": weighted_sample(
+            OrderField.order_id: data.ids,
+            OrderField.name: [f"Order {i}" for i in data.ids],
+            OrderField.company_id: data.order_companies,
+            OrderField.product_id: weighted_sample(product_ids, n=data.n),
+            OrderField.product_price_type: weighted_sample(
                 ["Fixed", "Variable", "Tiered", "Subscription", "Usage-based"],
                 [0.3, 0.3, 0.2, 0.1, 0.1],
                 data.n,
             ),
-            "product_quantity": [fake.random_int(min=1, max=100) for _ in data.ids],
-            "date_raised": data.order_dates,
-            "date_completed": data.delivery_dates,
-            "ceased_date": [
+            OrderField.product_quantity: [fake.random_int(min=1, max=100) for _ in data.ids],
+            OrderField.date_raised: data.order_dates,
+            OrderField.date_completed: data.delivery_dates,
+            OrderField.ceased_date: [
                 random_date() if fake.random.random() < data.ceased_date_probability else None
                 for _ in data.ids
             ],
-            "transaction_date": [random_date() for _ in data.ids],
+            OrderField.transaction_date: [random_date() for _ in data.ids],
             "transaction_channel": weighted_sample(
                 ["Online", "Phone", "In-person", "Email", "Partner"],
                 [0.4, 0.3, 0.1, 0.1, 0.1],
                 data.n,
             ),
-            "sales_order_value": data.order_amounts,
-            "sales_order_value_gross_margin": [
+            OrderField.sales_order_value: data.order_amounts,
+            OrderField.sales_order_value_gross_margin: [
                 round(amount * 0.4, 2) for amount in data.order_amounts
             ],
-            "initial_contract_value": [round(amount * 1.5, 2) for amount in data.order_amounts],
-            "initial_contract_value_gross_margin": [
+            OrderField.initial_contract_value: [
+                round(amount * 1.5, 2) for amount in data.order_amounts
+            ],
+            OrderField.initial_contract_value_gross_margin: [
                 round(amount * 0.4 * 1.5, 2) for amount in data.order_amounts
             ],
-            "average_revenue_per_unit": [
+            OrderField.average_revenue_per_unit: [
                 round(amount / fake.random_int(min=1, max=10), 2) for amount in data.order_amounts
             ],
-            "contract_term": [fake.random_int(min=1, max=36) for _ in data.ids],  # in months
-            "action_type": weighted_sample(
+            OrderField.contract_term: [
+                fake.random_int(min=1, max=36) for _ in data.ids
+            ],  # in months
+            OrderField.action_type: weighted_sample(
                 ["No Action", "Cease", "Modify", "Provide", "Mixed"],
                 [0.05, 0.3, 0.2, 0.4, 0.05],
                 data.n,
             ),
-            "cancel_reason": weighted_sample(CANCEL_REASONS, CANCEL_REASON_WEIGHTS, data.n),
+            OrderField.cancel_reason: weighted_sample(
+                CANCEL_REASONS, CANCEL_REASON_WEIGHTS, data.n
+            ),
             "cessetion_reason": weighted_sample(
                 CESSATION_REASONS, CESSATION_REASON_WEIGHTS, data.n
             ),
-            "person_id": data.order_contacts,
-            "previous_order_id": [
+            OrderField.person_id: data.order_contacts,
+            OrderField.previous_order_id: [
                 _find_previous_order(
                     order_id,
                     order_date,
@@ -457,7 +529,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
                     data.ids, data.order_dates, data.order_companies
                 )
             ],
-            "related_opportunity_id": [
+            OrderField.related_opportunity_id: [
                 (
                     f"OPP{fake.random_int(min=1, max=9999):07d}"
                     if fake.random.random() < data.related_opportunity_probability
@@ -465,7 +537,7 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
                 )
                 for _ in data.ids
             ],
-            "causal_interaction_id": [
+            OrderField.causal_interaction_id: [
                 _find_causal_interaction(
                     order_date,
                     company,
@@ -481,40 +553,29 @@ def _build_orders_dataframe(data: OrderData) -> pl.DataFrame:
     # Derived/renamed fields to align with downstream spreadsheet/tests
     df = df.with_columns(
         [
-            pl.col("date_completed").alias("outcomedate"),
-            pl.col("transaction_channel").alias("saleschannel"),
-            pl.Series("valuedeltas", [round(fake.random.uniform(-0.2, 0.2), 4) for _ in data.ids]),
+            pl.col(OrderField.date_completed).alias(OrderField.outcome_date),
+            pl.col("transaction_channel").alias(OrderField.sales_channel),
             pl.Series(
-                "valuedeltaswithretention",
-                [
-                    round(v * fake.random.uniform(0.9, 1.1), 4)
-                    for v in [fake.random.uniform(-0.2, 0.2) for _ in data.ids]
-                ],
-            ),
-            pl.Series("arpudelta", [round(fake.random.uniform(-10.0, 10.0), 2) for _ in data.ids]),
-            pl.Series(
-                "renewalquantitydifference", [fake.random_int(min=-5, max=5) for _ in data.ids]
-            ),
-            pl.Series(
-                "cessetionreasongroup",
+                OrderField.cessetion_reason_group,
                 weighted_sample(
                     ["Contract", "Commercial", "Service", "Migration", "Business Change"],
                     [0.3, 0.25, 0.2, 0.15, 0.1],
                     data.n,
                 ),
             ),
-            pl.col("cessetion_reason").alias("cessetionreasonsubgroup"),
+            pl.col("cessetion_reason").alias(OrderField.cessetion_reason_subgroup),
             pl.Series(
-                "sourcetable",
+                OrderField.source_table,
                 weighted_sample(
                     ["SFDC_ORDER", "LEGACY_ORDER", "MANUAL_LOAD"], [0.7, 0.2, 0.1], data.n
                 ),
             ),
             pl.Series(
-                "sourceid", [f"SRC-{fake.random_int(min=100000, max=999999)}" for _ in data.ids]
+                OrderField.source_id,
+                [f"SRC-{fake.random_int(min=100000, max=999999)}" for _ in data.ids],
             ),
             pl.Series(
-                "sourceidfield",
+                OrderField.source_id_field,
                 weighted_sample(
                     ["Salesforce OrderId", "LegacyOrderId", "ManualId"], [0.7, 0.2, 0.1], data.n
                 ),
@@ -550,28 +611,30 @@ def _harden_person_company_consistency(
     return (
         orders_df.lazy()
         .with_columns(
-            pl.col("person_id").cast(pl.String),
-            pl.col("company_id").cast(pl.String),
+            pl.col(OrderField.person_id).cast(pl.String),
+            pl.col(OrderField.company_id).cast(pl.String),
         )
-        .join(person_comp.lazy(), on="person_id", how="left")
+        .join(person_comp.lazy(), on=OrderField.person_id, how="left")
         .with_columns(
             # If order has no company but person has one → fill it
-            pl.when(pl.col("company_id").is_null() & pl.col("person_company_id").is_not_null())
+            pl.when(
+                pl.col(OrderField.company_id).is_null() & pl.col("person_company_id").is_not_null()
+            )
             .then(pl.col("person_company_id"))
-            .otherwise(pl.col("company_id"))
-            .alias("company_id"),
+            .otherwise(pl.col(OrderField.company_id))
+            .alias(OrderField.company_id),
         )
         .with_columns(
             # If both exist and disagree → NULL person_id to avoid a false link
             pl.when(
-                pl.col("person_id").is_not_null()
-                & pl.col("company_id").is_not_null()
+                pl.col(OrderField.person_id).is_not_null()
+                & pl.col(OrderField.company_id).is_not_null()
                 & (pl.col("person_company_id").is_not_null())
-                & (pl.col("person_company_id") != pl.col("company_id"))
+                & (pl.col("person_company_id") != pl.col(OrderField.company_id))
             )
             .then(pl.lit(None, dtype=pl.String))
-            .otherwise(pl.col("person_id"))
-            .alias("person_id")
+            .otherwise(pl.col(OrderField.person_id))
+            .alias(OrderField.person_id)
         )
         .drop("person_company_id")
         .collect()
@@ -608,8 +671,8 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:
 
     # Products list
     order_product_ids = (
-        product_df.select("product_id").to_series().to_list()
-        if (product_df is not None and "product_id" in product_df.columns)
+        product_df.select(ProductField.product_id).to_series().to_list()
+        if (product_df is not None and ProductField.product_id in product_df.columns)
         else []
     )
 

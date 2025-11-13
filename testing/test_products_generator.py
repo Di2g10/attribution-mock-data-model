@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
-from src.generators.products import generate
+from src.generators.products import generate, ProductField
 from src.config_loader import Config
 from src.schema_registry import SchemaRegistry
 
@@ -18,7 +18,7 @@ TINY_SAMPLE_SIZE = 10
 def test_products_unique_ids() -> None:
     """Test that generated product IDs are unique."""
     df = generate(LARGE_SAMPLE_SIZE)
-    ids = df.select("product_id").to_series()
+    ids = df.select(ProductField.product_id).to_series()
     assert ids.is_unique().all(), "product_id values should be unique"
     assert df.height == LARGE_SAMPLE_SIZE
 
@@ -28,24 +28,24 @@ def test_products_hierarchy() -> None:
     df = generate(LARGE_SAMPLE_SIZE)
 
     # Check that we have products at all three tiers
-    tier1_count = df.filter(pl.col("level") == "Tier 1").height
-    tier2_count = df.filter(pl.col("level") == "Tier 2").height
-    tier3_count = df.filter(pl.col("level") == "Tier 3").height
+    tier1_count = df.filter(pl.col(ProductField.level) == "Tier 1").height
+    tier2_count = df.filter(pl.col(ProductField.level) == "Tier 2").height
+    tier3_count = df.filter(pl.col(ProductField.level) == "Tier 3").height
 
     assert tier1_count > 0, "Should have at least one Tier 1 product"
     assert tier2_count > 0, "Should have at least one Tier 2 product"
     assert tier3_count > 0, "Should have at least one Tier 3 product"
 
     # Check that Tier 1 products have no parent (empty string)
-    tier1_products = df.filter(pl.col("level") == "Tier 1")
+    tier1_products = df.filter(pl.col(ProductField.level) == "Tier 1")
     assert (
-        tier1_products["product_parent_id"] == ""
+        tier1_products[ProductField.product_parent_id] == ""
     ).all(), "Tier 1 products should have empty string as parent"
 
     # Check that Tier 2 products have a Tier 1 parent
-    tier2_products = df.filter(pl.col("level") == "Tier 2")
-    tier2_parent_ids = tier2_products["product_parent_id"].to_list()
-    tier1_ids = tier1_products["product_id"].to_list()
+    tier2_products = df.filter(pl.col(ProductField.level) == "Tier 2")
+    tier2_parent_ids = tier2_products[ProductField.product_parent_id].to_list()
+    tier1_ids = tier1_products[ProductField.product_id].to_list()
 
     for parent_id in tier2_parent_ids:
         assert (
@@ -53,9 +53,9 @@ def test_products_hierarchy() -> None:
         ), f"Tier 2 product has parent {parent_id} which is not a Tier 1 product"
 
     # Check that Tier 3 products have a Tier 2 parent
-    tier3_products = df.filter(pl.col("level") == "Tier 3")
-    tier3_parent_ids = tier3_products["product_parent_id"].to_list()
-    tier2_ids = tier2_products["product_id"].to_list()
+    tier3_products = df.filter(pl.col(ProductField.level) == "Tier 3")
+    tier3_parent_ids = tier3_products[ProductField.product_parent_id].to_list()
+    tier2_ids = tier2_products[ProductField.product_id].to_list()
 
     for parent_id in tier3_parent_ids:
         assert (
@@ -103,20 +103,13 @@ class TestProductsWithDesignFile(unittest.TestCase):
         df = generate(SMALL_SAMPLE_SIZE)
 
         # Verify that the generated products have the expected fields
-        expected_fields = [
-            "product_id",
-            "product_parent_id",
-            "name",
-            "level",
-            "source_table",
-            "source_id_field",
-            "source_id",
-        ]
+        expected_fields = [f.value for f in ProductField]
+
         for field in expected_fields:
             self.assertIn(field, df.columns, f"Generated products should have a '{field}' field")
 
         # Verify that the level field has the expected values
-        levels = df["level"].unique().to_list()
+        levels = df[ProductField.level].unique().to_list()
         expected_levels = ["Tier 1", "Tier 2", "Tier 3"]
         for level in expected_levels:
             self.assertIn(
@@ -132,7 +125,7 @@ class TestProductsWithDesignFile(unittest.TestCase):
             )
 
         # Check that Tier 3 products have "BT" in their name
-        tier3_products = df.filter(pl.col("level") == "Tier 3")
+        tier3_products = df.filter(pl.col(ProductField.level) == "Tier 3")
         tier3_names = tier3_products["name"].to_list()
         for name in tier3_names:
             self.assertTrue(

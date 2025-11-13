@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from src.generators.interactions import generate as generate_interactions
+from src.generators.company import CompanyField
+from src.generators.interactions import generate as generate_interactions, InteractionField
 from testing.test_interactions_generator import get_registry
 
 
@@ -17,8 +18,8 @@ def prior_with_null_company_and_no_roles() -> dict[str, pl.DataFrame]:
     """Build a minimal prior where activities may have no targeted_company_id and no roles exist."""
     company_df = pl.DataFrame(
         {
-            "company_id": ["COX001", "COX002", "COX003"],
-            "company_name": ["X1", "X2", "X3"],
+            CompanyField.company_id: ["COX001", "COX002", "COX003"],
+            CompanyField.company_name: ["X1", "X2", "X3"],
         }
     )
 
@@ -63,21 +64,25 @@ def test_ip_company_match_populates_company() -> None:
 
     # Focus on df that were IP-matched and had person cleared
     ip_rows = df.filter(
-        (pl.col("identification_method_type") == "IP Company Match")
-        & pl.col("interacted_person_id").is_null()
+        (pl.col(InteractionField.identification_method_type) == "IP Company Match")
+        & pl.col(InteractionField.interacted_person_id).is_null()
     )
 
     # If none were produced due to randomness, relax by asserting no IP lf have null company
     if ip_rows.is_empty():
         # For any IP Company Match row, company must be non-null
-        ip_any = df.filter(pl.col("identification_method_type") == "IP Company Match")
+        ip_any = df.filter(
+            pl.col(InteractionField.identification_method_type) == "IP Company Match"
+        )
         assert (
             ip_any.is_empty()
-            or ip_any.select(pl.col("interacted_company_id").is_null().any()).item() is False
+            or ip_any.select(pl.col(InteractionField.interacted_company_id).is_null().any()).item()
+            is False
         )
         return
 
     # For produced IP-only lf, ensure company is populated
     assert (
-        ip_rows.select(pl.col("interacted_company_id").is_null().any()).item() is False
+        ip_rows.select(pl.col(InteractionField.interacted_company_id).is_null().any()).item()
+        is False
     ), "IP-only interactions should have a company populated"
