@@ -438,7 +438,7 @@ def generate(n: int, **kwargs: Any) -> pl.DataFrame:  # registry/prior unused ye
     # Historical/old market channel code (may differ from current)
     old_market_channel = weighted_sample(list(size_code_map.values()), [0.55, 0.2, 0.2, 0.05], n)
 
-    trading_unit_codes = ["BU1", "BU2", "BU3", "BU4"]
+    trading_unit_codes = ["SMB", "CPS", "Global", "Wholesale"]
     trading_unit = weighted_sample(trading_unit_codes, [0.4, 0.3, 0.2, 0.1], n)
     old_trading_unit = weighted_sample(trading_unit_codes, [0.3, 0.3, 0.2, 0.2], n)
 
