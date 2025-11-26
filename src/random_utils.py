@@ -19,6 +19,7 @@ __all__ = [
     "make_ids",
     "make_ids_with_duplicates",
     "random_date",
+    "require_df",
     "seed_everything",
     "weighted_sample",
 ]
@@ -29,7 +30,7 @@ _rng: Generator = default_rng(42)
 
 # ------------------------------------------------------------------
 START_DT = datetime(2024, 1, 1)
-END_DT = datetime(2025, 6, 30)
+END_DT = datetime(2025, 12, 30)
 _DATE_RANGE_DAYS = (END_DT - START_DT).days
 
 
@@ -269,6 +270,7 @@ def generate_source_id_mappings(
 
 
 def require_df(value: Any, name: str) -> pl.DataFrame:
+    """Check value is of type dataframe raising informative error on failure."""
     if not isinstance(value, pl.DataFrame):
         raise TypeError(f"Expected DataFrame for {name}, got {type(value).__name__}")
     return value
